@@ -1,9 +1,10 @@
 #!/bin/bash
 #
-# https://github.com/Nyr/wireguard-install
+# https://github.com/k0gen/wireguard-install
+# Fork of https://github.com/Nyr/wireguard-install
 #
-# Copyright (c) 2020 Nyr. Released under the MIT License.
-
+# Modified for StartOS clearnet functionality
+# Original work Copyright (c) 2020 Nyr. Released under the MIT License.
 
 # Detect Debian users running the script with "sh" instead of bash
 if readlink /proc/$$/exe | grep -q "dash"; then
@@ -97,50 +98,6 @@ TUN needs to be enabled before running this installer."
 	fi
 fi
 
-new_client_dns () {
-	echo "Select a DNS server for the client:"
-	echo "   1) Current system resolvers"
-	echo "   2) Google"
-	echo "   3) 1.1.1.1"
-	echo "   4) OpenDNS"
-	echo "   5) Quad9"
-	echo "   6) AdGuard"
-	read -p "DNS server [1]: " dns
-	until [[ -z "$dns" || "$dns" =~ ^[1-6]$ ]]; do
-		echo "$dns: invalid selection."
-		read -p "DNS server [1]: " dns
-	done
-		# DNS
-	case "$dns" in
-		1|"")
-			# Locate the proper resolv.conf
-			# Needed for systems running systemd-resolved
-			if grep '^nameserver' "/etc/resolv.conf" | grep -qv '127.0.0.53' ; then
-				resolv_conf="/etc/resolv.conf"
-			else
-				resolv_conf="/run/systemd/resolve/resolv.conf"
-			fi
-			# Extract nameservers and provide them in the required format
-			dns=$(grep -v '^#\|^;' "$resolv_conf" | grep '^nameserver' | grep -v '127.0.0.53' | grep -oE '[0-9]{1,3}(\.[0-9]{1,3}){3}' | xargs | sed -e 's/ /, /g')
-		;;
-		2)
-			dns="8.8.8.8, 8.8.4.4"
-		;;
-		3)
-			dns="1.1.1.1, 1.0.0.1"
-		;;
-		4)
-			dns="208.67.222.222, 208.67.220.220"
-		;;
-		5)
-			dns="9.9.9.9, 149.112.112.112"
-		;;
-		6)
-			dns="94.140.14.14, 94.140.15.15"
-		;;
-	esac
-}
-
 new_client_setup () {
 	# Given a list of the assigned internal IPv4 addresses, obtain the lowest still
 	# available octet. Important to start looking at 2, because 1 is our gateway.
@@ -161,14 +118,13 @@ new_client_setup () {
 [Peer]
 PublicKey = $(wg pubkey <<< $key)
 PresharedKey = $psk
-AllowedIPs = 10.7.0.$octet/32$(grep -q 'fddd:2c4:2c4:2c4::1' /etc/wireguard/wg0.conf && echo ", fddd:2c4:2c4:2c4::$octet/128")
+AllowedIPs = 10.59.0.$octet/32$(grep -q 'fddd:2c4:2c4:2c4::1' /etc/wireguard/wg0.conf && echo ", fddd:2c4:2c4:2c4::$octet/128")
 # END_PEER $client
 EOF
 	# Create client configuration
 	cat << EOF > ~/"$client".conf
 [Interface]
-Address = 10.7.0.$octet/24$(grep -q 'fddd:2c4:2c4:2c4::1' /etc/wireguard/wg0.conf && echo ", fddd:2c4:2c4:2c4::$octet/64")
-DNS = $dns
+Address = 10.59.0.$octet/24$(grep -q 'fddd:2c4:2c4:2c4::1' /etc/wireguard/wg0.conf && echo ", fddd:2c4:2c4:2c4::$octet/64")
 PrivateKey = $key
 
 [Peer]
@@ -189,7 +145,7 @@ if [[ ! -e /etc/wireguard/wg0.conf ]]; then
 		apt-get install -y wget
 	fi
 	clear
-	echo 'Welcome to this WireGuard road warrior installer!'
+	echo 'Welcome to StartOS WireGuard Clearnet Gateway Setup!'
 	# If system has a single IPv4, it is selected automatically. Else, ask the user
 	if [[ $(ip -4 addr | grep inet | grep -vEc '127(\.[0-9]{1,3}){3}') -eq 1 ]]; then
 		ip=$(ip -4 addr | grep inet | grep -vE '127(\.[0-9]{1,3}){3}' | cut -d '/' -f 1 | grep -oE '[0-9]{1,3}(\.[0-9]{1,3}){3}')
@@ -253,7 +209,6 @@ if [[ ! -e /etc/wireguard/wg0.conf ]]; then
 	client=$(sed 's/[^0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-]/_/g' <<< "$unsanitized_client" | cut -c-15)
 	[[ -z "$client" ]] && client="client"
 	echo
-	new_client_dns
 	# Set up automatic updates for BoringTun if the user is fine with that
 	if [[ "$use_boringtun" -eq 1 ]]; then
 		echo
@@ -293,18 +248,18 @@ if [[ ! -e /etc/wireguard/wg0.conf ]]; then
 		if [[ "$os" == "ubuntu" ]]; then
 			# Ubuntu
 			apt-get update
-			apt-get install -y wireguard qrencode $firewall
+			apt-get install -y wireguard $firewall
 		elif [[ "$os" == "debian" ]]; then
 			# Debian
 			apt-get update
-			apt-get install -y wireguard qrencode $firewall
+			apt-get install -y wireguard $firewall
 		elif [[ "$os" == "centos" ]]; then
 			# CentOS
 			dnf install -y epel-release
-			dnf install -y wireguard-tools qrencode $firewall
+			dnf install -y wireguard-tools $firewall
 		elif [[ "$os" == "fedora" ]]; then
 			# Fedora
-			dnf install -y wireguard-tools qrencode $firewall
+			dnf install -y wireguard-tools $firewall
 			mkdir -p /etc/wireguard/
 		fi
 	# Else, BoringTun needs to be used
@@ -313,20 +268,20 @@ if [[ ! -e /etc/wireguard/wg0.conf ]]; then
 		if [[ "$os" == "ubuntu" ]]; then
 			# Ubuntu
 			apt-get update
-			apt-get install -y qrencode ca-certificates $cron $firewall
+			apt-get install -y ca-certificates $cron $firewall
 			apt-get install -y wireguard-tools --no-install-recommends
 		elif [[ "$os" == "debian" ]]; then
 			# Debian
 			apt-get update
-			apt-get install -y qrencode ca-certificates $cron $firewall
+			apt-get install -y ca-certificates $cron $firewall
 			apt-get install -y wireguard-tools --no-install-recommends
 		elif [[ "$os" == "centos" ]]; then
 			# CentOS
 			dnf install -y epel-release
-			dnf install -y wireguard-tools qrencode ca-certificates tar $cron $firewall
+			dnf install -y wireguard-tools ca-certificates tar $cron $firewall
 		elif [[ "$os" == "fedora" ]]; then
 			# Fedora
-			dnf install -y wireguard-tools qrencode ca-certificates tar $cron $firewall
+			dnf install -y wireguard-tools ca-certificates tar $cron $firewall
 			mkdir -p /etc/wireguard/
 		fi
 		# Grab the BoringTun binary using wget or curl and extract into the right place.
@@ -352,7 +307,7 @@ Environment=WG_SUDO=1" > /etc/systemd/system/wg-quick@wg0.service.d/boringtun.co
 # ENDPOINT $([[ -n "$public_ip" ]] && echo "$public_ip" || echo "$ip")
 
 [Interface]
-Address = 10.7.0.1/24$([[ -n "$ip6" ]] && echo ", fddd:2c4:2c4:2c4::1/64")
+Address = 10.59.0.1/24$([[ -n "$ip6" ]] && echo ", fddd:2c4:2c4:2c4::1/64")
 PrivateKey = $(wg genkey)
 ListenPort = $port
 
@@ -369,21 +324,47 @@ EOF
 		echo 1 > /proc/sys/net/ipv6/conf/all/forwarding
 	fi
 	if systemctl is-active --quiet firewalld.service; then
-		# Using both permanent and not permanent rules to avoid a firewalld
-		# reload.
-		firewall-cmd --add-port="$port"/udp
-		firewall-cmd --zone=trusted --add-source=10.7.0.0/24
-		firewall-cmd --permanent --add-port="$port"/udp
-		firewall-cmd --permanent --zone=trusted --add-source=10.7.0.0/24
-		# Set NAT for the VPN subnet
-		firewall-cmd --direct --add-rule ipv4 nat POSTROUTING 0 -s 10.7.0.0/24 ! -d 10.7.0.0/24 -j SNAT --to "$ip"
-		firewall-cmd --permanent --direct --add-rule ipv4 nat POSTROUTING 0 -s 10.7.0.0/24 ! -d 10.7.0.0/24 -j SNAT --to "$ip"
-		if [[ -n "$ip6" ]]; then
-			firewall-cmd --zone=trusted --add-source=fddd:2c4:2c4:2c4::/64
-			firewall-cmd --permanent --zone=trusted --add-source=fddd:2c4:2c4:2c4::/64
-			firewall-cmd --direct --add-rule ipv6 nat POSTROUTING 0 -s fddd:2c4:2c4:2c4::/64 ! -d fddd:2c4:2c4:2c4::/64 -j SNAT --to "$ip6"
-			firewall-cmd --permanent --direct --add-rule ipv6 nat POSTROUTING 0 -s fddd:2c4:2c4:2c4::/64 ! -d fddd:2c4:2c4:2c4::/64 -j SNAT --to "$ip6"
-		fi
+    # Original VPN rules
+    firewall-cmd --add-port="$port"/udp
+    firewall-cmd --zone=trusted --add-source=10.59.0.0/24
+    firewall-cmd --permanent --add-port="$port"/udp
+    firewall-cmd --permanent --zone=trusted --add-source=10.59.0.0/24
+    firewall-cmd --direct --add-rule ipv4 nat POSTROUTING 0 -s 10.59.0.0/24 ! -d 10.59.0.0/24 -j SNAT --to "$ip"
+    firewall-cmd --permanent --direct --add-rule ipv4 nat POSTROUTING 0 -s 10.59.0.0/24 ! -d 10.59.0.0/24 -j SNAT --to "$ip"
+    
+    # Port forwarding rules
+    firewall-cmd --direct --add-rule ipv4 filter FORWARD 0 -i wg0 -j ACCEPT
+    firewall-cmd --direct --add-rule ipv4 nat POSTROUTING 0 -o eth0 -j MASQUERADE
+    firewall-cmd --direct --add-rule ipv4 nat PREROUTING 0 -i eth0 -p tcp ! --dport 22 -j DNAT --to-destination 10.59.0.2
+    firewall-cmd --direct --add-rule ipv4 nat PREROUTING 0 -i eth0 -p udp -m multiport ! --dports 22,"$port" -j DNAT --to-destination 10.59.0.2
+    firewall-cmd --direct --add-rule ipv4 filter FORWARD 0 -j ACCEPT
+    
+    # Make rules permanent
+    firewall-cmd --permanent --direct --add-rule ipv4 filter FORWARD 0 -i wg0 -j ACCEPT
+    firewall-cmd --permanent --direct --add-rule ipv4 nat POSTROUTING 0 -o eth0 -j MASQUERADE
+    firewall-cmd --permanent --direct --add-rule ipv4 nat PREROUTING 0 -i eth0 -p tcp ! --dport 22 -j DNAT --to-destination 10.59.0.2
+    firewall-cmd --permanent --direct --add-rule ipv4 nat PREROUTING 0 -i eth0 -p udp -m multiport ! --dports 22,"$port" -j DNAT --to-destination 10.59.0.2
+    firewall-cmd --permanent --direct --add-rule ipv4 filter FORWARD 0 -j ACCEPT
+
+    # IPv6 rules if enabled
+    if [[ -n "$ip6" ]]; then
+        firewall-cmd --zone=trusted --add-source=fddd:2c4:2c4:2c4::/64
+        firewall-cmd --permanent --zone=trusted --add-source=fddd:2c4:2c4:2c4::/64
+        firewall-cmd --direct --add-rule ipv6 nat POSTROUTING 0 -s fddd:2c4:2c4:2c4::/64 ! -d fddd:2c4:2c4:2c4::/64 -j SNAT --to "$ip6"
+        firewall-cmd --permanent --direct --add-rule ipv6 nat POSTROUTING 0 -s fddd:2c4:2c4:2c4::/64 ! -d fddd:2c4:2c4:2c4::/64 -j SNAT --to "$ip6"
+        
+        firewall-cmd --direct --add-rule ipv6 filter FORWARD 0 -i wg0 -j ACCEPT
+        firewall-cmd --direct --add-rule ipv6 nat POSTROUTING 0 -o eth0 -j MASQUERADE
+        firewall-cmd --direct --add-rule ipv6 nat PREROUTING 0 -i eth0 -p tcp ! --dport 22 -j DNAT --to-destination fddd:2c4:2c4:2c4::2
+        firewall-cmd --direct --add-rule ipv6 nat PREROUTING 0 -i eth0 -p udp -m multiport ! --dports 22,"$port" -j DNAT --to-destination fddd:2c4:2c4:2c4::2
+        firewall-cmd --direct --add-rule ipv6 filter FORWARD 0 -j ACCEPT
+        
+        firewall-cmd --permanent --direct --add-rule ipv6 filter FORWARD 0 -i wg0 -j ACCEPT
+        firewall-cmd --permanent --direct --add-rule ipv6 nat POSTROUTING 0 -o eth0 -j MASQUERADE
+        firewall-cmd --permanent --direct --add-rule ipv6 nat PREROUTING 0 -i eth0 -p tcp ! --dport 22 -j DNAT --to-destination fddd:2c4:2c4:2c4::2
+        firewall-cmd --permanent --direct --add-rule ipv6 nat PREROUTING 0 -i eth0 -p udp -m multiport ! --dports 22,"$port" -j DNAT --to-destination fddd:2c4:2c4:2c4::2
+        firewall-cmd --permanent --direct --add-rule ipv6 filter FORWARD 0 -j ACCEPT
+    fi
 	else
 		# Create a service to set up persistent iptables rules
 		iptables_path=$(command -v iptables)
@@ -398,22 +379,47 @@ EOF
 Before=network.target
 [Service]
 Type=oneshot
-ExecStart=$iptables_path -t nat -A POSTROUTING -s 10.7.0.0/24 ! -d 10.7.0.0/24 -j SNAT --to $ip
+# Original VPN access rules
+ExecStart=$iptables_path -t nat -A POSTROUTING -s 10.59.0.0/24 ! -d 10.59.0.0/24 -j SNAT --to $ip
 ExecStart=$iptables_path -I INPUT -p udp --dport $port -j ACCEPT
-ExecStart=$iptables_path -I FORWARD -s 10.7.0.0/24 -j ACCEPT
+ExecStart=$iptables_path -I FORWARD -s 10.59.0.0/24 -j ACCEPT
 ExecStart=$iptables_path -I FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
-ExecStop=$iptables_path -t nat -D POSTROUTING -s 10.7.0.0/24 ! -d 10.7.0.0/24 -j SNAT --to $ip
+# New port forwarding rules
+ExecStart=$iptables_path -A FORWARD -i wg0 -j ACCEPT
+ExecStart=$iptables_path -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+ExecStart=$iptables_path -t nat -A PREROUTING -i eth0 -p tcp ! --dport 22 -j DNAT --to-destination 10.59.0.2
+ExecStart=$iptables_path -t nat -A PREROUTING -i eth0 -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination 10.59.0.2
+ExecStart=$iptables_path -A FORWARD -j ACCEPT
+ExecStart=$iptables_path -t nat -A POSTROUTING -j MASQUERADE
+# Stop commands for all rules
+ExecStop=$iptables_path -t nat -D POSTROUTING -s 10.59.0.0/24 ! -d 10.59.0.0/24 -j SNAT --to $ip
 ExecStop=$iptables_path -D INPUT -p udp --dport $port -j ACCEPT
-ExecStop=$iptables_path -D FORWARD -s 10.7.0.0/24 -j ACCEPT
-ExecStop=$iptables_path -D FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT" > /etc/systemd/system/wg-iptables.service
+ExecStop=$iptables_path -D FORWARD -s 10.59.0.0/24 -j ACCEPT
+ExecStop=$iptables_path -D FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
+ExecStop=$iptables_path -D FORWARD -i wg0 -j ACCEPT
+ExecStop=$iptables_path -t nat -D POSTROUTING -o eth0 -j MASQUERADE
+ExecStop=$iptables_path -t nat -D PREROUTING -i eth0 -p tcp ! --dport 22 -j DNAT --to-destination 10.59.0.2
+ExecStop=$iptables_path -t nat -D PREROUTING -i eth0 -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination 10.59.0.2
+ExecStop=$iptables_path -D FORWARD -j ACCEPT
+ExecStop=$iptables_path -t nat -D POSTROUTING -j MASQUERADE" > /etc/systemd/system/wg-iptables.service
 		if [[ -n "$ip6" ]]; then
 			echo "ExecStart=$ip6tables_path -t nat -A POSTROUTING -s fddd:2c4:2c4:2c4::/64 ! -d fddd:2c4:2c4:2c4::/64 -j SNAT --to $ip6
 ExecStart=$ip6tables_path -I FORWARD -s fddd:2c4:2c4:2c4::/64 -j ACCEPT
 ExecStart=$ip6tables_path -I FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
+ExecStart=$ip6tables_path -A FORWARD -i wg0 -j ACCEPT
+ExecStart=$ip6tables_path -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+ExecStart=$ip6tables_path -t nat -A PREROUTING -i eth0 -p tcp ! --dport 22 -j DNAT --to-destination fddd:2c4:2c4:2c4::2
+ExecStart=$ip6tables_path -t nat -A PREROUTING -i eth0 -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination fddd:2c4:2c4:2c4::2
+ExecStart=$ip6tables_path -A FORWARD -j ACCEPT
 ExecStop=$ip6tables_path -t nat -D POSTROUTING -s fddd:2c4:2c4:2c4::/64 ! -d fddd:2c4:2c4:2c4::/64 -j SNAT --to $ip6
 ExecStop=$ip6tables_path -D FORWARD -s fddd:2c4:2c4:2c4::/64 -j ACCEPT
-ExecStop=$ip6tables_path -D FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT" >> /etc/systemd/system/wg-iptables.service
-		fi
+ExecStop=$ip6tables_path -D FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
+ExecStop=$ip6tables_path -D FORWARD -i wg0 -j ACCEPT
+ExecStop=$ip6tables_path -t nat -D POSTROUTING -o eth0 -j MASQUERADE
+ExecStop=$ip6tables_path -t nat -D PREROUTING -i eth0 -p tcp ! --dport 22 -j DNAT --to-destination fddd:2c4:2c4:2c4::2
+ExecStop=$ip6tables_path -t nat -D PREROUTING -i eth0 -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination fddd:2c4:2c4:2c4::2
+ExecStop=$ip6tables_path -D FORWARD -j ACCEPT" >> /etc/systemd/system/wg-iptables.service
+fi
 		echo "RemainAfterExit=yes
 [Install]
 WantedBy=multi-user.target" >> /etc/systemd/system/wg-iptables.service
@@ -458,9 +464,6 @@ EOF
 		{ crontab -l 2>/dev/null; echo "$(( $RANDOM % 60 )) $(( $RANDOM % 3 + 3 )) * * * /usr/local/sbin/boringtun-upgrade &>/dev/null" ; } | crontab -
 	fi
 	echo
-	qrencode -t ANSI256UTF8 < ~/"$client.conf"
-	echo -e '\xE2\x86\x91 That is a QR code containing the client configuration.'
-	echo
 	echo "Finished!"
 	echo
 	echo "The client configuration is available in:" ~/"$client.conf"
@@ -496,9 +499,6 @@ else
 			new_client_setup
 			# Append new client configuration to the WireGuard interface
 			wg addconf wg0 <(sed -n "/^# BEGIN_PEER $client/,/^# END_PEER $client/p" /etc/wireguard/wg0.conf)
-			echo
-			qrencode -t ANSI256UTF8 < ~/"$client.conf"
-			echo -e '\xE2\x86\x91 That is a QR code containing your client configuration.'
 			echo
 			echo "$client added. Configuration available in:" ~/"$client.conf"
 			exit
@@ -551,20 +551,44 @@ else
 			if [[ "$remove" =~ ^[yY]$ ]]; then
 				port=$(grep '^ListenPort' /etc/wireguard/wg0.conf | cut -d " " -f 3)
 				if systemctl is-active --quiet firewalld.service; then
-					ip=$(firewall-cmd --direct --get-rules ipv4 nat POSTROUTING | grep '\-s 10.7.0.0/24 '"'"'!'"'"' -d 10.7.0.0/24' | grep -oE '[^ ]+$')
-					# Using both permanent and not permanent rules to avoid a firewalld reload.
+					# Remove IPv4 rules
 					firewall-cmd --remove-port="$port"/udp
-					firewall-cmd --zone=trusted --remove-source=10.7.0.0/24
+					firewall-cmd --zone=trusted --remove-source=10.59.0.0/24
 					firewall-cmd --permanent --remove-port="$port"/udp
-					firewall-cmd --permanent --zone=trusted --remove-source=10.7.0.0/24
-					firewall-cmd --direct --remove-rule ipv4 nat POSTROUTING 0 -s 10.7.0.0/24 ! -d 10.7.0.0/24 -j SNAT --to "$ip"
-					firewall-cmd --permanent --direct --remove-rule ipv4 nat POSTROUTING 0 -s 10.7.0.0/24 ! -d 10.7.0.0/24 -j SNAT --to "$ip"
+					firewall-cmd --permanent --zone=trusted --remove-source=10.59.0.0/24
+					firewall-cmd --direct --remove-rule ipv4 nat POSTROUTING 0 -s 10.59.0.0/24 ! -d 10.59.0.0/24 -j SNAT --to "$ip"
+					firewall-cmd --permanent --direct --remove-rule ipv4 nat POSTROUTING 0 -s 10.59.0.0/24 ! -d 10.59.0.0/24 -j SNAT --to "$ip"
+					
+					firewall-cmd --direct --remove-rule ipv4 filter FORWARD 0 -i wg0 -j ACCEPT
+					firewall-cmd --direct --remove-rule ipv4 nat POSTROUTING 0 -o eth0 -j MASQUERADE
+					firewall-cmd --direct --remove-rule ipv4 nat PREROUTING 0 -i eth0 -p tcp ! --dport 22 -j DNAT --to-destination 10.59.0.2
+					firewall-cmd --direct --remove-rule ipv4 nat PREROUTING 0 -i eth0 -p udp -m multiport ! --dports 22,"$port" -j DNAT --to-destination 10.59.0.2
+					firewall-cmd --direct --remove-rule ipv4 filter FORWARD 0 -j ACCEPT
+					
+					firewall-cmd --permanent --direct --remove-rule ipv4 filter FORWARD 0 -i wg0 -j ACCEPT
+					firewall-cmd --permanent --direct --remove-rule ipv4 nat POSTROUTING 0 -o eth0 -j MASQUERADE
+					firewall-cmd --permanent --direct --remove-rule ipv4 nat PREROUTING 0 -i eth0 -p tcp ! --dport 22 -j DNAT --to-destination 10.59.0.2
+					firewall-cmd --permanent --direct --remove-rule ipv4 nat PREROUTING 0 -i eth0 -p udp -m multiport ! --dports 22,"$port" -j DNAT --to-destination 10.59.0.2
+					firewall-cmd --permanent --direct --remove-rule ipv4 filter FORWARD 0 -j ACCEPT
+
+					# Remove IPv6 rules if they exist
 					if grep -qs 'fddd:2c4:2c4:2c4::1/64' /etc/wireguard/wg0.conf; then
-						ip6=$(firewall-cmd --direct --get-rules ipv6 nat POSTROUTING | grep '\-s fddd:2c4:2c4:2c4::/64 '"'"'!'"'"' -d fddd:2c4:2c4:2c4::/64' | grep -oE '[^ ]+$')
 						firewall-cmd --zone=trusted --remove-source=fddd:2c4:2c4:2c4::/64
 						firewall-cmd --permanent --zone=trusted --remove-source=fddd:2c4:2c4:2c4::/64
 						firewall-cmd --direct --remove-rule ipv6 nat POSTROUTING 0 -s fddd:2c4:2c4:2c4::/64 ! -d fddd:2c4:2c4:2c4::/64 -j SNAT --to "$ip6"
 						firewall-cmd --permanent --direct --remove-rule ipv6 nat POSTROUTING 0 -s fddd:2c4:2c4:2c4::/64 ! -d fddd:2c4:2c4:2c4::/64 -j SNAT --to "$ip6"
+						
+						firewall-cmd --direct --remove-rule ipv6 filter FORWARD 0 -i wg0 -j ACCEPT
+						firewall-cmd --direct --remove-rule ipv6 nat POSTROUTING 0 -o eth0 -j MASQUERADE
+						firewall-cmd --direct --remove-rule ipv6 nat PREROUTING 0 -i eth0 -p tcp ! --dport 22 -j DNAT --to-destination fddd:2c4:2c4:2c4::2
+						firewall-cmd --direct --remove-rule ipv6 nat PREROUTING 0 -i eth0 -p udp -m multiport ! --dports 22,"$port" -j DNAT --to-destination fddd:2c4:2c4:2c4::2
+						firewall-cmd --direct --remove-rule ipv6 filter FORWARD 0 -j ACCEPT
+						
+						firewall-cmd --permanent --direct --remove-rule ipv6 filter FORWARD 0 -i wg0 -j ACCEPT
+						firewall-cmd --permanent --direct --remove-rule ipv6 nat POSTROUTING 0 -o eth0 -j MASQUERADE
+						firewall-cmd --permanent --direct --remove-rule ipv6 nat PREROUTING 0 -i eth0 -p tcp ! --dport 22 -j DNAT --to-destination fddd:2c4:2c4:2c4::2
+						firewall-cmd --permanent --direct --remove-rule ipv6 nat PREROUTING 0 -i eth0 -p udp -m multiport ! --dports 22,"$port" -j DNAT --to-destination fddd:2c4:2c4:2c4::2
+						firewall-cmd --permanent --direct --remove-rule ipv6 filter FORWARD 0 -j ACCEPT
 					fi
 				else
 					systemctl disable --now wg-iptables.service
