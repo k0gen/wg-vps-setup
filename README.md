@@ -16,7 +16,7 @@ Automated WireGuard VPN deployment tool for StartOS that configures a remote VPS
 Download and run the script:
 
 ```bash
-wget https://raw.githubusercontent.com/k0gen/wireguard-install/master/wg-vps-setup.sh
+curl -OL https://raw.githubusercontent.com/k0gen/wireguard-install/master/wg-vps-setup.sh
 chmod +x wg-vps-setup.sh
 sudo ./wg-vps-setup.sh -i YOUR_VPS_IP
 ```
