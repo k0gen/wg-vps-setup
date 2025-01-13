@@ -204,10 +204,11 @@ if [[ ! -e /etc/wireguard/wg0.conf ]]; then
   [[ -z "$port" ]] && port="51820"
   echo
   echo "Enter a name for the first client:"
-  read -p "Name [client]: " unsanitized_client
-  # Allow a limited lenght and set of characters to avoid conflicts
-  client=$(sed 's/[^0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-]/_/g' <<< "$unsanitized_client" | cut -c-15)
-  [[ -z "$client" ]] && client="client"
+  # Use STARTOS_HOSTNAME if set, otherwise default to "sos-client"
+  default_name="${STARTOS_HOSTNAME:-sos-client}"
+  read -p "Name [$default_name]: " unsanitized_client
+  # Allow a limited length and set of characters to avoid conflicts
+  client=$(sed 's/[^0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-]/_/g' <<< "${unsanitized_client:-$default_name}" | cut -c-15)
   echo
   # Set up automatic updates for BoringTun if the user is fine with that
   if [[ "$use_boringtun" -eq 1 ]]; then
