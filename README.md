@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="icon.png" alt="Project Logo" width="21%">
+</p>
+
 # StartOS WireGuard VPS Setup Tool
 
 Automated WireGuard VPN deployment tool for StartOS that configures a remote VPS server and sets up secure tunneling in under a minute. This project builds upon the excellent [wireguard-install](https://github.com/Nyr/wireguard-install) script.
