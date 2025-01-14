@@ -75,12 +75,12 @@ check_root() {
 generate_ssh_key() {
     echo -e "${BLUE}Generating SSH key...${NC}"
     if [ ! -f "$SSH_PRIVATE_KEY" ]; then
-        ssh-keygen -t ed25519 -f "$SSH_PRIVATE_KEY" -N "" > /dev/null 2>&1
+        ssh-keygen -t ed25519 -f "$SSH_PRIVATE_KEY" -N "" >/dev/null 2>&1
         if [ $? -ne 0 ]; then
             echo -e "${RED}Failed to generate SSH key.${NC}"
             exit 1
         fi
-      echo -e "${GREEN}SSH key generated successfully!${NC}"
+        echo -e "${GREEN}SSH key generated successfully!${NC}"
     else
         echo -e "${YELLOW}SSH key already exists at '$SSH_PRIVATE_KEY', skipping key generation.${NC}"
     fi
@@ -99,7 +99,7 @@ handle_startos_connection() {
     CONFIG_NAME=$(basename "$config_file")
 
     # Download the configuration file
-    if ! scp -i "$SSH_PRIVATE_KEY" -o StrictHostKeyChecking=no -P "$SSH_PORT" "$SSH_USER@$VPS_IP":~/"$CONFIG_NAME" ./ ; then
+    if ! scp -i "$SSH_PRIVATE_KEY" -o StrictHostKeyChecking=no -P "$SSH_PORT" "$SSH_USER@$VPS_IP":~/"$CONFIG_NAME" ./; then
         echo -e "${RED}Error: Failed to download the WireGuard configuration file.${NC}"
         return 1 # Exit with error
     fi
@@ -114,7 +114,7 @@ import_wireguard_config() {
         echo -e "${RED}Error: Configuration file name is missing.${NC}"
         return 1
     fi
-    
+
     local connection_name=$(basename "$config_name" .conf) #Extract base name without extension
 
     # Check if the connection with same name already exists
@@ -142,7 +142,7 @@ import_wireguard_config() {
         fi
     else
         # Import if connection did not exist
-        if command -v nmcli &> /dev/null; then
+        if command -v nmcli &>/dev/null; then
             if ! nmcli connection import type wireguard file "$config_name"; then
                 echo -e "${RED}Error: Failed to import the WireGuard configuration using NetworkManager.${NC}"
                 rm -f "$config_name"
@@ -167,7 +167,7 @@ download_install_script() {
         echo -e "${RED}Failed to download WireGuard installation script.${NC}"
         return 1
     fi
-     chmod +x wireguard-install.sh
+    chmod +x wireguard-install.sh
     if [ $? -ne 0 ]; then
         echo -e "${RED}Failed to chmod +x wireguard install script.${NC}"
         return 1
@@ -182,8 +182,8 @@ install_wireguard() {
 
     # Check if install script exist
     if [ ! -f "wireguard-install.sh" ]; then
-      echo -e "${RED}WireGuard install script is missing. Did it failed to download?${NC}"
-      return 1
+        echo -e "${RED}WireGuard install script is missing. Did it failed to download?${NC}"
+        return 1
     fi
 
     # Run the remote install script and let it complete
@@ -194,7 +194,7 @@ install_wireguard() {
 
     # Test if wireguard installed
     if ! ssh -q -o BatchMode=yes -o ConnectTimeout=5 -i "$SSH_PRIVATE_KEY" -o StrictHostKeyChecking=no -p "$SSH_PORT" "$SSH_USER@$VPS_IP" "test -f /etc/wireguard/wg0.conf"; then
-         echo -e "\n${RED}WireGuard installation failed because /etc/wireguard/wg0.conf is missing, which means the script removed it.${NC}"
+        echo -e "\n${RED}WireGuard installation failed because /etc/wireguard/wg0.conf is missing, which means the script removed it.${NC}"
         return 1
     fi
 
@@ -219,42 +219,42 @@ print_banner
 # Parse command line arguments
 while getopts "hi:u:p:k:" opt; do
     case $opt in
-        h)
-            print_usage
-            exit 0
-            ;;
-        i)
-            VPS_IP=$OPTARG
-            ;;
-        u)
-            SSH_USER=$OPTARG
-            ;;
-        p)
-            SSH_PORT=$OPTARG
-            ;;
-        k)
-            CUSTOM_SSH_KEY=$OPTARG
-            ;;
-        \?)
-            echo "Invalid option: -$OPTARG" >&2
-            print_usage
-            exit 1
-            ;;
+    h)
+        print_usage
+        exit 0
+        ;;
+    i)
+        VPS_IP=$OPTARG
+        ;;
+    u)
+        SSH_USER=$OPTARG
+        ;;
+    p)
+        SSH_PORT=$OPTARG
+        ;;
+    k)
+        CUSTOM_SSH_KEY=$OPTARG
+        ;;
+    \?)
+        echo "Invalid option: -$OPTARG" >&2
+        print_usage
+        exit 1
+        ;;
     esac
 done
 
 # Check if custom SSH key is passed and update the private key variable
 if [ -n "$CUSTOM_SSH_KEY" ]; then
     if [ ! -f "$CUSTOM_SSH_KEY" ]; then
-      echo -e "${RED}Custom SSH key '$CUSTOM_SSH_KEY' not found.${NC}"
-      exit 1
+        echo -e "${RED}Custom SSH key '$CUSTOM_SSH_KEY' not found.${NC}"
+        exit 1
     fi
-   SSH_PRIVATE_KEY="$CUSTOM_SSH_KEY"
-   SSH_PUBLIC_KEY="$CUSTOM_SSH_KEY.pub"
-   if [ ! -f "$SSH_PUBLIC_KEY" ]; then
-      echo -e "${RED}Public key '$SSH_PUBLIC_KEY' not found. Try to create it with 'ssh-keygen -y -f $SSH_PRIVATE_KEY > $SSH_PUBLIC_KEY'${NC}"
-     exit 1
-   fi
+    SSH_PRIVATE_KEY="$CUSTOM_SSH_KEY"
+    SSH_PUBLIC_KEY="$CUSTOM_SSH_KEY.pub"
+    if [ ! -f "$SSH_PUBLIC_KEY" ]; then
+        echo -e "${RED}Public key '$SSH_PUBLIC_KEY' not found. Try to create it with 'ssh-keygen -y -f $SSH_PRIVATE_KEY > $SSH_PUBLIC_KEY'${NC}"
+        exit 1
+    fi
 else
     # Generate SSH key if it doesn't exist
     generate_ssh_key
@@ -282,15 +282,15 @@ echo "SSH Port: $SSH_PORT"
 # Generate key or let user know it exist
 if [ -z "$CUSTOM_SSH_KEY" ]; then
     if [ ! -f "$SSH_PRIVATE_KEY" ]; then
-      echo -e "\nSetting up SSH key-based authentication..."
+        echo -e "\nSetting up SSH key-based authentication..."
     else
-      echo -e "\nSSH key already exist, skipping generation"
-      echo -e "\nSetting up SSH key-based authentication..."
+        echo -e "\nSSH key already exist, skipping generation"
+        echo -e "\nSetting up SSH key-based authentication..."
     fi
 fi
 
 # Copy SSH public key to the remote server
-if ! ssh-copy-id -i "$SSH_PUBLIC_KEY" -o StrictHostKeyChecking=no -p "$SSH_PORT" "$SSH_USER@$VPS_IP" > /dev/null 2>&1; then
+if ! ssh-copy-id -i "$SSH_PUBLIC_KEY" -o StrictHostKeyChecking=no -p "$SSH_PORT" "$SSH_USER@$VPS_IP" >/dev/null 2>&1; then
     echo -e "${RED}Failed to copy SSH key to the remote server. Please ensure you have correct credentials.${NC}"
     exit 1
 fi
@@ -308,14 +308,14 @@ echo -e "${GREEN}SSH connection successful with key-based authentication!${NC}"
 
 # Download the WireGuard install script locally
 if ! download_install_script; then
-  echo -e "${RED}Failed to download the latest install script. Exiting...${NC}"
+    echo -e "${RED}Failed to download the latest install script. Exiting...${NC}"
     exit 1
 fi
 
 # Upload the install script to the remote server
 if ! scp -i "$SSH_PRIVATE_KEY" -o StrictHostKeyChecking=no -P "$SSH_PORT" wireguard-install.sh "$SSH_USER@$VPS_IP":~/; then
-  echo -e "${RED}Failed to upload WireGuard install script to the remote server.${NC}"
-  exit 1
+    echo -e "${RED}Failed to upload WireGuard install script to the remote server.${NC}"
+    exit 1
 fi
 
 # Install WireGuard on remote server using the downloaded script
