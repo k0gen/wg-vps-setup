@@ -63,11 +63,10 @@ validate_ip() {
     fi
 }
 
-# Function to check if the script is run as root
+# Function to ensure script runs with root privileges by auto-elevating if needed
 check_root() {
     if [[ "$EUID" -ne 0 ]]; then
-        echo -e "${RED}This script must be run as root. Please use sudo or run as root user.${NC}"
-        exit 1
+        exec sudo "$0" "$@"
     fi
 }
 
