@@ -474,7 +474,7 @@ else
   echo
   echo "Select an option:"
   echo "   1) Remove WireGuard"
-  echo "   2) Exit"
+  echo "   2) Connect and exit"
   read -p "Option: " option
   until [[ "$option" =~ ^[1-2]$ ]]; do
     echo "$option: invalid selection."
