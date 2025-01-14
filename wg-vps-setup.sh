@@ -14,7 +14,17 @@ readonly SSH_KEY_NAME="id_ed25519"
 readonly SSH_PRIVATE_KEY="$SSH_KEY_DIR/$SSH_KEY_NAME"
 readonly SSH_PUBLIC_KEY="$SSH_PRIVATE_KEY.pub"
 
+# Store original arguments
+SCRIPT_ARGS=("$@")
+
 # --- Functions ---
+
+# Function to ensure script runs with root privileges by auto-elevating if needed
+check_root() {
+    if [[ "$EUID" -ne 0 ]]; then
+        exec sudo "$0" "${SCRIPT_ARGS[@]}"
+    fi
+}
 
 # Function to print banner
 print_banner() {
@@ -60,13 +70,6 @@ validate_ip() {
         return 0
     else
         return 1
-    fi
-}
-
-# Function to ensure script runs with root privileges by auto-elevating if needed
-check_root() {
-    if [[ "$EUID" -ne 0 ]]; then
-        exec sudo "$0" "$@"
     fi
 }
 
