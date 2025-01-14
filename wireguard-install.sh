@@ -208,7 +208,7 @@ if [[ ! -e /etc/wireguard/wg0.conf ]]; then
   default_name="${STARTOS_HOSTNAME:-sos-client}"
   read -p "Name [$default_name]: " unsanitized_client
   # Allow a limited length and set of characters to avoid conflicts
-  client=$(sed 's/[^0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-]/_/g' <<< "${unsanitized_client:-$default_name}" | cut -c-18)
+  client=$(sed 's/[^0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-]/_/g' <<< "${unsanitized_client:-$default_name}" | cut -c-15)
   echo
   # Set up automatic updates for BoringTun if the user is fine with that
   if [[ "$use_boringtun" -eq 1 ]]; then
