@@ -150,6 +150,7 @@ import_wireguard_config() {
             fi
             echo -e "${GREEN}WireGuard configuration '$config_name' has been imported to NetworkManager.${NC}"
             rm -f "$config_name"
+            display_end_message
         else
             echo -e "${YELLOW}Warning: NetworkManager 'nmcli' not found. Configuration file '$config_name' saved in current directory.${NC}"
             echo -e "${YELLOW}Import the configuration to your StartOS manually by going to NetworkManager or using wg-quick up <config> command${NC}"
