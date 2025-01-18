@@ -7,7 +7,7 @@
 # Original work Copyright (c) 2020 Nyr. Released under the MIT License.
 
 # Detect Debian users running the script with "sh" instead of bash
-if readlink /proc/$$/exe | grep -q "dash"; then
+if readlink /proc/$/exe | grep -q "dash"; then
   echo 'This installer needs to be run with "bash", not "sh".'
   exit
 fi
@@ -167,7 +167,7 @@ if [[ ! -e /etc/wireguard/wg0.conf ]]; then
     echo
     echo "This server is behind NAT. What is the public IPv4 address or hostname?"
     # Get public IP and sanitize with grep
-    get_public_ip=$(grep -m 1 -oE '^[0-9]{1,3}(\.[0-9]{1,3}){3}$' <<< "$(wget -T 10 -t 1 -4qO- "http://ip1.dynupdate.no-ip.com/" || curl -m 10 -4Ls "http://ip1.dynupdate.no-ip.com/")")
+    get_public_ip=$(grep -m 1 -oE '^[0-9]{1,3}(\.[0-9]{1,3}){3}' <<< "$(wget -T 10 -t 1 -4qO- "http://ip1.dynupdate.no-ip.com/" || curl -m 10 -4Ls "http://ip1.dynupdate.no-ip.com/")")
     read -p "Public IPv4 address / hostname [$get_public_ip]: " public_ip
     # If the checkip service is unavailable and user didn't provide input, ask again
     until [[ -n "$get_public_ip" || -n "$public_ip" ]]; do
@@ -263,7 +263,6 @@ if [[ ! -e /etc/wireguard/wg0.conf ]]; then
       dnf install -y wireguard-tools $firewall
       mkdir -p /etc/wireguard/
     fi
-    # Else, BoringTun needs to be used
   else
     # Install required packages
     if [[ "$os" == "ubuntu" ]]; then
@@ -376,16 +375,74 @@ EOF
       iptables_path=$(command -v iptables-legacy)
       ip6tables_path=$(command -v ip6tables-legacy)
     fi
-    echo "[Unit]
+    
+    if [[ -n "$ip6" ]]; then
+      echo "[Unit]
 Before=network.target
+
 [Service]
 Type=oneshot
+RemainAfterExit=yes
+# IPv4 rules
+ExecStart=$iptables_path -t nat -A POSTROUTING -s 10.59.0.0/24 ! -d 10.59.0.0/24 -j SNAT --to $ip
+ExecStart=$iptables_path -I INPUT -p udp --dport $port -j ACCEPT
+ExecStart=$iptables_path -I FORWARD -s 10.59.0.0/24 -j ACCEPT
+ExecStart=$iptables_path -I FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
+ExecStart=$iptables_path -t nat -A POSTROUTING -s 10.59.0.0/24 -d 10.59.0.0/24 -j MASQUERADE
+ExecStart=$iptables_path -A FORWARD -i wg0 -j ACCEPT
+ExecStart=$iptables_path -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+ExecStart=$iptables_path -t nat -A PREROUTING -i eth0 -p tcp ! --dport 22 -j DNAT --to-destination 10.59.0.2
+ExecStart=$iptables_path -t nat -A PREROUTING -i eth0 -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination 10.59.0.2
+ExecStart=$iptables_path -A FORWARD -j ACCEPT
+ExecStart=$iptables_path -t nat -A POSTROUTING -j MASQUERADE
+# IPv6 rules
+ExecStart=$ip6tables_path -t nat -A POSTROUTING -s fddd:2c4:2c4:2c4::/64 ! -d fddd:2c4:2c4:2c4::/64 -j SNAT --to $ip6
+ExecStart=$ip6tables_path -I FORWARD -s fddd:2c4:2c4:2c4::/64 -j ACCEPT
+ExecStart=$ip6tables_path -I FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
+ExecStart=$ip6tables_path -A FORWARD -i wg0 -j ACCEPT
+ExecStart=$ip6tables_path -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+ExecStart=$ip6tables_path -t nat -A PREROUTING -i eth0 -p tcp ! --dport 22 -j DNAT --to-destination fddd:2c4:2c4:2c4::2
+ExecStart=$ip6tables_path -t nat -A PREROUTING -i eth0 -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination fddd:2c4:2c4:2c4::2
+ExecStart=$ip6tables_path -A FORWARD -j ACCEPT
+# IPv4 stop rules
+ExecStop=$iptables_path -t nat -D POSTROUTING -s 10.59.0.0/24 ! -d 10.59.0.0/24 -j SNAT --to $ip
+ExecStop=$iptables_path -D INPUT -p udp --dport $port -j ACCEPT
+ExecStop=$iptables_path -D FORWARD -s 10.59.0.0/24 -j ACCEPT
+ExecStop=$iptables_path -D FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
+ExecStop=$iptables_path -t nat -D POSTROUTING -s 10.59.0.0/24 -d 10.59.0.0/24 -j MASQUERADE
+ExecStop=$iptables_path -D FORWARD -i wg0 -j ACCEPT
+ExecStop=$iptables_path -t nat -D POSTROUTING -o eth0 -j MASQUERADE
+ExecStop=$iptables_path -t nat -D PREROUTING -i eth0 -p tcp ! --dport 22 -j DNAT --to-destination 10.59.0.2
+ExecStop=$iptables_path -t nat -D PREROUTING -i eth0 -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination 10.59.0.2
+ExecStop=$iptables_path -D FORWARD -j ACCEPT
+ExecStop=$iptables_path -t nat -D POSTROUTING -j MASQUERADE
+# IPv6 stop rules
+ExecStop=$ip6tables_path -t nat -D POSTROUTING -s fddd:2c4:2c4:2c4::/64 ! -d fddd:2c4:2c4:2c4::/64 -j SNAT --to $ip6
+ExecStop=$ip6tables_path -D FORWARD -s fddd:2c4:2c4:2c4::/64 -j ACCEPT
+ExecStop=$ip6tables_path -D FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
+ExecStop=$ip6tables_path -D FORWARD -i wg0 -j ACCEPT
+ExecStop=$ip6tables_path -t nat -D POSTROUTING -o eth0 -j MASQUERADE
+ExecStop=$ip6tables_path -t nat -D PREROUTING -i eth0 -p tcp ! --dport 22 -j DNAT --to-destination fddd:2c4:2c4:2c4::2
+ExecStop=$ip6tables_path -t nat -D PREROUTING -i eth0 -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination fddd:2c4:2c4:2c4::2
+ExecStop=$ip6tables_path -D FORWARD -j ACCEPT
+
+[Install]
+WantedBy=multi-user.target" > /etc/systemd/system/wg-iptables.service
+    else
+      echo "[Unit]
+Before=network.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
 # Original VPN access rules
 ExecStart=$iptables_path -t nat -A POSTROUTING -s 10.59.0.0/24 ! -d 10.59.0.0/24 -j SNAT --to $ip
 ExecStart=$iptables_path -I INPUT -p udp --dport $port -j ACCEPT
 ExecStart=$iptables_path -I FORWARD -s 10.59.0.0/24 -j ACCEPT
 ExecStart=$iptables_path -I FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
-# New port forwarding rules
+# NAT Loopback rules
+ExecStart=$iptables_path -t nat -A POSTROUTING -s 10.59.0.0/24 -d 10.59.0.0/24 -j MASQUERADE
+# Port forwarding rules
 ExecStart=$iptables_path -A FORWARD -i wg0 -j ACCEPT
 ExecStart=$iptables_path -t nat -A POSTROUTING -o eth0 -j MASQUERADE
 ExecStart=$iptables_path -t nat -A PREROUTING -i eth0 -p tcp ! --dport 22 -j DNAT --to-destination 10.59.0.2
@@ -397,33 +454,17 @@ ExecStop=$iptables_path -t nat -D POSTROUTING -s 10.59.0.0/24 ! -d 10.59.0.0/24 
 ExecStop=$iptables_path -D INPUT -p udp --dport $port -j ACCEPT
 ExecStop=$iptables_path -D FORWARD -s 10.59.0.0/24 -j ACCEPT
 ExecStop=$iptables_path -D FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
+ExecStop=$iptables_path -t nat -D POSTROUTING -s 10.59.0.0/24 -d 10.59.0.0/24 -j MASQUERADE
 ExecStop=$iptables_path -D FORWARD -i wg0 -j ACCEPT
 ExecStop=$iptables_path -t nat -D POSTROUTING -o eth0 -j MASQUERADE
 ExecStop=$iptables_path -t nat -D PREROUTING -i eth0 -p tcp ! --dport 22 -j DNAT --to-destination 10.59.0.2
 ExecStop=$iptables_path -t nat -D PREROUTING -i eth0 -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination 10.59.0.2
 ExecStop=$iptables_path -D FORWARD -j ACCEPT
-ExecStop=$iptables_path -t nat -D POSTROUTING -j MASQUERADE" > /etc/systemd/system/wg-iptables.service
-    if [[ -n "$ip6" ]]; then
-      echo "ExecStart=$ip6tables_path -t nat -A POSTROUTING -s fddd:2c4:2c4:2c4::/64 ! -d fddd:2c4:2c4:2c4::/64 -j SNAT --to $ip6
-ExecStart=$ip6tables_path -I FORWARD -s fddd:2c4:2c4:2c4::/64 -j ACCEPT
-ExecStart=$ip6tables_path -I FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
-ExecStart=$ip6tables_path -A FORWARD -i wg0 -j ACCEPT
-ExecStart=$ip6tables_path -t nat -A POSTROUTING -o eth0 -j MASQUERADE
-ExecStart=$ip6tables_path -t nat -A PREROUTING -i eth0 -p tcp ! --dport 22 -j DNAT --to-destination fddd:2c4:2c4:2c4::2
-ExecStart=$ip6tables_path -t nat -A PREROUTING -i eth0 -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination fddd:2c4:2c4:2c4::2
-ExecStart=$ip6tables_path -A FORWARD -j ACCEPT
-ExecStop=$ip6tables_path -t nat -D POSTROUTING -s fddd:2c4:2c4:2c4::/64 ! -d fddd:2c4:2c4:2c4::/64 -j SNAT --to $ip6
-ExecStop=$ip6tables_path -D FORWARD -s fddd:2c4:2c4:2c4::/64 -j ACCEPT
-ExecStop=$ip6tables_path -D FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
-ExecStop=$ip6tables_path -D FORWARD -i wg0 -j ACCEPT
-ExecStop=$ip6tables_path -t nat -D POSTROUTING -o eth0 -j MASQUERADE
-ExecStop=$ip6tables_path -t nat -D PREROUTING -i eth0 -p tcp ! --dport 22 -j DNAT --to-destination fddd:2c4:2c4:2c4::2
-ExecStop=$ip6tables_path -t nat -D PREROUTING -i eth0 -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination fddd:2c4:2c4:2c4::2
-ExecStop=$ip6tables_path -D FORWARD -j ACCEPT" >> /etc/systemd/system/wg-iptables.service
-    fi
-    echo "RemainAfterExit=yes
+ExecStop=$iptables_path -t nat -D POSTROUTING -j MASQUERADE
+
 [Install]
-WantedBy=multi-user.target" >> /etc/systemd/system/wg-iptables.service
+WantedBy=multi-user.target" > /etc/systemd/system/wg-iptables.service
+    fi
     systemctl enable --now wg-iptables.service
   fi
   # Generates the custom client.conf
