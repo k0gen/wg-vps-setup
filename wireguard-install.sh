@@ -337,6 +337,10 @@ EOF
     firewall-cmd --direct --add-rule ipv4 nat POSTROUTING 0 -o eth0 -j MASQUERADE
     firewall-cmd --direct --add-rule ipv4 nat PREROUTING 0 -i eth0 -p tcp ! --dport 22 -j DNAT --to-destination 10.59.0.2
     firewall-cmd --direct --add-rule ipv4 nat PREROUTING 0 -i eth0 -p udp -m multiport ! --dports 22,"$port" -j DNAT --to-destination 10.59.0.2
+    firewall-cmd --direct --add-rule ipv4 nat PREROUTING 0 -i wg0 -s 10.59.0.0/24 -d $ip -p tcp ! --dport 22 -j DNAT --to-destination 10.59.0.2
+    firewall-cmd --direct --add-rule ipv4 nat PREROUTING 0 -i wg0 -s 10.59.0.0/24 -d $ip -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination 10.59.0.2
+    firewall-cmd --direct --add-rule ipv4 nat POSTROUTING 0 -o wg0 -s 10.59.0.0/24 -d 10.59.0.2/32 -p tcp ! --dport 22 -j SNAT --to-source 10.59.0.1
+    firewall-cmd --direct --add-rule ipv4 nat POSTROUTING 0 -o wg0 -s 10.59.0.0/24 -d 10.59.0.2/32 -p udp -m multiport ! --dports 22,$port -j SNAT --to-source 10.59.0.1
     firewall-cmd --direct --add-rule ipv4 filter FORWARD 0 -j ACCEPT
 
     # Make rules permanent
@@ -344,6 +348,10 @@ EOF
     firewall-cmd --permanent --direct --add-rule ipv4 nat POSTROUTING 0 -o eth0 -j MASQUERADE
     firewall-cmd --permanent --direct --add-rule ipv4 nat PREROUTING 0 -i eth0 -p tcp ! --dport 22 -j DNAT --to-destination 10.59.0.2
     firewall-cmd --permanent --direct --add-rule ipv4 nat PREROUTING 0 -i eth0 -p udp -m multiport ! --dports 22,"$port" -j DNAT --to-destination 10.59.0.2
+    firewall-cmd --permanent --direct --add-rule ipv4 nat PREROUTING 0 -i wg0 -s 10.59.0.0/24 -d $ip -p tcp ! --dport 22 -j DNAT --to-destination 10.59.0.2
+    firewall-cmd --permanent --direct --add-rule ipv4 nat PREROUTING 0 -i wg0 -s 10.59.0.0/24 -d $ip -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination 10.59.0.2
+    firewall-cmd --permanent --direct --add-rule ipv4 nat POSTROUTING 0 -o wg0 -s 10.59.0.0/24 -d 10.59.0.2/32 -p tcp ! --dport 22 -j SNAT --to-source 10.59.0.1
+    firewall-cmd --permanent --direct --add-rule ipv4 nat POSTROUTING 0 -o wg0 -s 10.59.0.0/24 -d 10.59.0.2/32 -p udp -m multiport ! --dports 22,$port -j SNAT --to-source 10.59.0.1
     firewall-cmd --permanent --direct --add-rule ipv4 filter FORWARD 0 -j ACCEPT
 
     # IPv6 rules if enabled
@@ -357,12 +365,20 @@ EOF
       firewall-cmd --direct --add-rule ipv6 nat POSTROUTING 0 -o eth0 -j MASQUERADE
       firewall-cmd --direct --add-rule ipv6 nat PREROUTING 0 -i eth0 -p tcp ! --dport 22 -j DNAT --to-destination fddd:2c4:2c4:2c4::2
       firewall-cmd --direct --add-rule ipv6 nat PREROUTING 0 -i eth0 -p udp -m multiport ! --dports 22,"$port" -j DNAT --to-destination fddd:2c4:2c4:2c4::2
+      firewall-cmd --direct --add-rule ipv6 nat PREROUTING 0 -i wg0 -s fddd:2c4:2c4:2c4::/64 -d $ip6 -p tcp ! --dport 22 -j DNAT --to-destination fddd:2c4:2c4:2c4::2
+      firewall-cmd --direct --add-rule ipv6 nat PREROUTING 0 -i wg0 -s fddd:2c4:2c4:2c4::/64 -d $ip6 -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination fddd:2c4:2c4:2c4::2
+      firewall-cmd --direct --add-rule ipv6 nat POSTROUTING 0 -o wg0 -s fddd:2c4:2c4:2c4::/64 -d fddd:2c4:2c4:2c4::/64 -p tcp ! --dport 22 -j SNAT --to-source fddd:2c4:2c4:2c4::1
+      firewall-cmd --direct --add-rule ipv6 nat POSTROUTING 0 -o wg0 -s fddd:2c4:2c4:2c4::/64 -d fddd:2c4:2c4:2c4::/64 -p udp -m multiport ! --dports 22,$port -j SNAT --to-source fddd:2c4:2c4:2c4::1
       firewall-cmd --direct --add-rule ipv6 filter FORWARD 0 -j ACCEPT
 
       firewall-cmd --permanent --direct --add-rule ipv6 filter FORWARD 0 -i wg0 -j ACCEPT
       firewall-cmd --permanent --direct --add-rule ipv6 nat POSTROUTING 0 -o eth0 -j MASQUERADE
       firewall-cmd --permanent --direct --add-rule ipv6 nat PREROUTING 0 -i eth0 -p tcp ! --dport 22 -j DNAT --to-destination fddd:2c4:2c4:2c4::2
       firewall-cmd --permanent --direct --add-rule ipv6 nat PREROUTING 0 -i eth0 -p udp -m multiport ! --dports 22,"$port" -j DNAT --to-destination fddd:2c4:2c4:2c4::2
+      firewall-cmd --permanent --direct --add-rule ipv6 nat PREROUTING 0 -i wg0 -s fddd:2c4:2c4:2c4::/64 -d $ip6 -p tcp ! --dport 22 -j DNAT --to-destination fddd:2c4:2c4:2c4::2
+      firewall-cmd --permanent --direct --add-rule ipv6 nat PREROUTING 0 -i wg0 -s fddd:2c4:2c4:2c4::/64 -d $ip6 -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination fddd:2c4:2c4:2c4::2
+      firewall-cmd --permanent --direct --add-rule ipv6 nat POSTROUTING 0 -o wg0 -s fddd:2c4:2c4:2c4::/64 -d fddd:2c4:2c4:2c4::/64 -p tcp ! --dport 22 -j SNAT --to-source fddd:2c4:2c4:2c4::1
+      firewall-cmd --permanent --direct --add-rule ipv6 nat POSTROUTING 0 -o wg0 -s fddd:2c4:2c4:2c4::/64 -d fddd:2c4:2c4:2c4::/64 -p udp -m multiport ! --dports 22,$port -j SNAT --to-source fddd:2c4:2c4:2c4::1
       firewall-cmd --permanent --direct --add-rule ipv6 filter FORWARD 0 -j ACCEPT
     fi
   else
@@ -388,13 +404,14 @@ ExecStart=$iptables_path -t nat -A POSTROUTING -s 10.59.0.0/24 ! -d 10.59.0.0/24
 ExecStart=$iptables_path -I INPUT -p udp --dport $port -j ACCEPT
 ExecStart=$iptables_path -I FORWARD -s 10.59.0.0/24 -j ACCEPT
 ExecStart=$iptables_path -I FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
-ExecStart=$iptables_path -t nat -A POSTROUTING -s 10.59.0.0/24 -d 10.59.0.0/24 -j MASQUERADE
-ExecStart=$iptables_path -A FORWARD -i wg0 -j ACCEPT
 ExecStart=$iptables_path -t nat -A POSTROUTING -o eth0 -j MASQUERADE
 ExecStart=$iptables_path -t nat -A PREROUTING -i eth0 -p tcp ! --dport 22 -j DNAT --to-destination 10.59.0.2
 ExecStart=$iptables_path -t nat -A PREROUTING -i eth0 -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination 10.59.0.2
+ExecStart=$iptables_path -t nat -A PREROUTING -i wg0 -s 10.59.0.0/24 -d $ip -p tcp ! --dport 22 -j DNAT --to-destination 10.59.0.2
+ExecStart=$iptables_path -t nat -A PREROUTING -i wg0 -s 10.59.0.0/24 -d $ip -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination 10.59.0.2
+ExecStart=$iptables_path -t nat -A POSTROUTING -o wg0 -s 10.59.0.0/24 -d 10.59.0.2/32 -p tcp ! --dport 22 -j SNAT --to-source 10.59.0.1
+ExecStart=$iptables_path -t nat -A POSTROUTING -o wg0 -s 10.59.0.0/24 -d 10.59.0.2/32 -p udp -m multiport ! --dports 22,$port -j SNAT --to-source 10.59.0.1
 ExecStart=$iptables_path -A FORWARD -j ACCEPT
-ExecStart=$iptables_path -t nat -A POSTROUTING -j MASQUERADE
 # IPv6 rules
 ExecStart=$ip6tables_path -t nat -A POSTROUTING -s fddd:2c4:2c4:2c4::/64 ! -d fddd:2c4:2c4:2c4::/64 -j SNAT --to $ip6
 ExecStart=$ip6tables_path -I FORWARD -s fddd:2c4:2c4:2c4::/64 -j ACCEPT
@@ -403,19 +420,24 @@ ExecStart=$ip6tables_path -A FORWARD -i wg0 -j ACCEPT
 ExecStart=$ip6tables_path -t nat -A POSTROUTING -o eth0 -j MASQUERADE
 ExecStart=$ip6tables_path -t nat -A PREROUTING -i eth0 -p tcp ! --dport 22 -j DNAT --to-destination fddd:2c4:2c4:2c4::2
 ExecStart=$ip6tables_path -t nat -A PREROUTING -i eth0 -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination fddd:2c4:2c4:2c4::2
+ExecStart=$ip6tables_path -t nat -A PREROUTING -i wg0 -s fddd:2c4:2c4:2c4::/64 -d $ip6 -p tcp ! --dport 22 -j DNAT --to-destination fddd:2c4:2c4:2c4::2
+ExecStart=$ip6tables_path -t nat -A PREROUTING -i wg0 -s fddd:2c4:2c4:2c4::/64 -d $ip6 -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination fddd:2c4:2c4:2c4::2
+ExecStart=$ip6tables_path -t nat -A POSTROUTING -o wg0 -s fddd:2c4:2c4:2c4::/64 -d fddd:2c4:2c4:2c4::/64 -p tcp ! --dport 22 -j SNAT --to-source fddd:2c4:2c4:2c4::1
+ExecStart=$ip6tables_path -t nat -A POSTROUTING -o wg0 -s fddd:2c4:2c4:2c4::/64 -d fddd:2c4:2c4:2c4::/64 -p udp -m multiport ! --dports 22,$port -j SNAT --to-source fddd:2c4:2c4:2c4::1
 ExecStart=$ip6tables_path -A FORWARD -j ACCEPT
 # IPv4 stop rules
 ExecStop=$iptables_path -t nat -D POSTROUTING -s 10.59.0.0/24 ! -d 10.59.0.0/24 -j SNAT --to $ip
 ExecStop=$iptables_path -D INPUT -p udp --dport $port -j ACCEPT
 ExecStop=$iptables_path -D FORWARD -s 10.59.0.0/24 -j ACCEPT
 ExecStop=$iptables_path -D FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
-ExecStop=$iptables_path -t nat -D POSTROUTING -s 10.59.0.0/24 -d 10.59.0.0/24 -j MASQUERADE
-ExecStop=$iptables_path -D FORWARD -i wg0 -j ACCEPT
 ExecStop=$iptables_path -t nat -D POSTROUTING -o eth0 -j MASQUERADE
 ExecStop=$iptables_path -t nat -D PREROUTING -i eth0 -p tcp ! --dport 22 -j DNAT --to-destination 10.59.0.2
 ExecStop=$iptables_path -t nat -D PREROUTING -i eth0 -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination 10.59.0.2
+ExecStop=$iptables_path -t nat -D PREROUTING -i wg0 -s 10.59.0.0/24 -d $ip -p tcp ! --dport 22 -j DNAT --to-destination 10.59.0.2
+ExecStop=$iptables_path -t nat -D PREROUTING -i wg0 -s 10.59.0.0/24 -d $ip -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination 10.59.0.2
+ExecStop=$iptables_path -t nat -D POSTROUTING -o wg0 -s 10.59.0.0/24 -d 10.59.0.2/32 -p tcp ! --dport 22 -j SNAT --to-source 10.59.0.1
+ExecStop=$iptables_path -t nat -D POSTROUTING -o wg0 -s 10.59.0.0/24 -d 10.59.0.2/32 -p udp -m multiport ! --dports 22,$port -j SNAT --to-source 10.59.0.1
 ExecStop=$iptables_path -D FORWARD -j ACCEPT
-ExecStop=$iptables_path -t nat -D POSTROUTING -j MASQUERADE
 # IPv6 stop rules
 ExecStop=$ip6tables_path -t nat -D POSTROUTING -s fddd:2c4:2c4:2c4::/64 ! -d fddd:2c4:2c4:2c4::/64 -j SNAT --to $ip6
 ExecStop=$ip6tables_path -D FORWARD -s fddd:2c4:2c4:2c4::/64 -j ACCEPT
@@ -424,6 +446,10 @@ ExecStop=$ip6tables_path -D FORWARD -i wg0 -j ACCEPT
 ExecStop=$ip6tables_path -t nat -D POSTROUTING -o eth0 -j MASQUERADE
 ExecStop=$ip6tables_path -t nat -D PREROUTING -i eth0 -p tcp ! --dport 22 -j DNAT --to-destination fddd:2c4:2c4:2c4::2
 ExecStop=$ip6tables_path -t nat -D PREROUTING -i eth0 -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination fddd:2c4:2c4:2c4::2
+ExecStop=$ip6tables_path -t nat -D PREROUTING -i wg0 -s fddd:2c4:2c4:2c4::/64 -d $ip6 -p tcp ! --dport 22 -j DNAT --to-destination fddd:2c4:2c4:2c4::2
+ExecStop=$ip6tables_path -t nat -D PREROUTING -i wg0 -s fddd:2c4:2c4:2c4::/64 -d $ip6 -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination fddd:2c4:2c4:2c4::2
+ExecStop=$ip6tables_path -t nat -D POSTROUTING -o wg0 -s fddd:2c4:2c4:2c4::/64 -d fddd:2c4:2c4:2c4::/64 -p tcp ! --dport 22 -j SNAT --to-source fddd:2c4:2c4:2c4::1
+ExecStop=$ip6tables_path -t nat -D POSTROUTING -o wg0 -s fddd:2c4:2c4:2c4::/64 -d fddd:2c4:2c4:2c4::/64 -p udp -m multiport ! --dports 22,$port -j SNAT --to-source fddd:2c4:2c4:2c4::1
 ExecStop=$ip6tables_path -D FORWARD -j ACCEPT
 
 [Install]
@@ -435,32 +461,32 @@ Before=network.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-# Original VPN access rules
+# IPv4 rules
 ExecStart=$iptables_path -t nat -A POSTROUTING -s 10.59.0.0/24 ! -d 10.59.0.0/24 -j SNAT --to $ip
 ExecStart=$iptables_path -I INPUT -p udp --dport $port -j ACCEPT
 ExecStart=$iptables_path -I FORWARD -s 10.59.0.0/24 -j ACCEPT
 ExecStart=$iptables_path -I FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
-# NAT Loopback rules
-ExecStart=$iptables_path -t nat -A POSTROUTING -s 10.59.0.0/24 -d 10.59.0.0/24 -j MASQUERADE
-# Port forwarding rules
-ExecStart=$iptables_path -A FORWARD -i wg0 -j ACCEPT
 ExecStart=$iptables_path -t nat -A POSTROUTING -o eth0 -j MASQUERADE
 ExecStart=$iptables_path -t nat -A PREROUTING -i eth0 -p tcp ! --dport 22 -j DNAT --to-destination 10.59.0.2
 ExecStart=$iptables_path -t nat -A PREROUTING -i eth0 -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination 10.59.0.2
+ExecStart=$iptables_path -t nat -A PREROUTING -i wg0 -s 10.59.0.0/24 -d $ip -p tcp ! --dport 22 -j DNAT --to-destination 10.59.0.2
+ExecStart=$iptables_path -t nat -A PREROUTING -i wg0 -s 10.59.0.0/24 -d $ip -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination 10.59.0.2
+ExecStart=$iptables_path -t nat -A POSTROUTING -o wg0 -s 10.59.0.0/24 -d 10.59.0.2/32 -p tcp ! --dport 22 -j SNAT --to-source 10.59.0.1
+ExecStart=$iptables_path -t nat -A POSTROUTING -o wg0 -s 10.59.0.0/24 -d 10.59.0.2/32 -p udp -m multiport ! --dports 22,$port -j SNAT --to-source 10.59.0.1
 ExecStart=$iptables_path -A FORWARD -j ACCEPT
-ExecStart=$iptables_path -t nat -A POSTROUTING -j MASQUERADE
-# Stop commands for all rules
+# IPv4 stop rules
 ExecStop=$iptables_path -t nat -D POSTROUTING -s 10.59.0.0/24 ! -d 10.59.0.0/24 -j SNAT --to $ip
 ExecStop=$iptables_path -D INPUT -p udp --dport $port -j ACCEPT
 ExecStop=$iptables_path -D FORWARD -s 10.59.0.0/24 -j ACCEPT
 ExecStop=$iptables_path -D FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
-ExecStop=$iptables_path -t nat -D POSTROUTING -s 10.59.0.0/24 -d 10.59.0.0/24 -j MASQUERADE
-ExecStop=$iptables_path -D FORWARD -i wg0 -j ACCEPT
 ExecStop=$iptables_path -t nat -D POSTROUTING -o eth0 -j MASQUERADE
 ExecStop=$iptables_path -t nat -D PREROUTING -i eth0 -p tcp ! --dport 22 -j DNAT --to-destination 10.59.0.2
 ExecStop=$iptables_path -t nat -D PREROUTING -i eth0 -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination 10.59.0.2
+ExecStop=$iptables_path -t nat -D PREROUTING -i wg0 -s 10.59.0.0/24 -d $ip -p tcp ! --dport 22 -j DNAT --to-destination 10.59.0.2
+ExecStop=$iptables_path -t nat -D PREROUTING -i wg0 -s 10.59.0.0/24 -d $ip -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination 10.59.0.2
+ExecStop=$iptables_path -t nat -D POSTROUTING -o wg0 -s 10.59.0.0/24 -d 10.59.0.2/32 -p tcp ! --dport 22 -j SNAT --to-source 10.59.0.1
+ExecStop=$iptables_path -t nat -D POSTROUTING -o wg0 -s 10.59.0.0/24 -d 10.59.0.2/32 -p udp -m multiport ! --dports 22,$port -j SNAT --to-source 10.59.0.1
 ExecStop=$iptables_path -D FORWARD -j ACCEPT
-ExecStop=$iptables_path -t nat -D POSTROUTING -j MASQUERADE
 
 [Install]
 WantedBy=multi-user.target" > /etc/systemd/system/wg-iptables.service
@@ -544,12 +570,20 @@ else
           firewall-cmd --direct --remove-rule ipv4 nat POSTROUTING 0 -o eth0 -j MASQUERADE
           firewall-cmd --direct --remove-rule ipv4 nat PREROUTING 0 -i eth0 -p tcp ! --dport 22 -j DNAT --to-destination 10.59.0.2
           firewall-cmd --direct --remove-rule ipv4 nat PREROUTING 0 -i eth0 -p udp -m multiport ! --dports 22,"$port" -j DNAT --to-destination 10.59.0.2
+          firewall-cmd --direct --remove-rule ipv4 nat PREROUTING 0 -i wg0 -s 10.59.0.0/24 -d $ip -p tcp ! --dport 22 -j DNAT --to-destination 10.59.0.2
+          firewall-cmd --direct --remove-rule ipv4 nat PREROUTING 0 -i wg0 -s 10.59.0.0/24 -d $ip -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination 10.59.0.2
+          firewall-cmd --direct --remove-rule ipv4 nat POSTROUTING 0 -o wg0 -s 10.59.0.0/24 -d 10.59.0.2/32 -p tcp ! --dport 22 -j SNAT --to-source 10.59.0.1
+          firewall-cmd --direct --remove-rule ipv4 nat POSTROUTING 0 -o wg0 -s 10.59.0.0/24 -d 10.59.0.2/32 -p udp -m multiport ! --dports 22,$port -j SNAT --to-source 10.59.0.1
           firewall-cmd --direct --remove-rule ipv4 filter FORWARD 0 -j ACCEPT
 
           firewall-cmd --permanent --direct --remove-rule ipv4 filter FORWARD 0 -i wg0 -j ACCEPT
           firewall-cmd --permanent --direct --remove-rule ipv4 nat POSTROUTING 0 -o eth0 -j MASQUERADE
           firewall-cmd --permanent --direct --remove-rule ipv4 nat PREROUTING 0 -i eth0 -p tcp ! --dport 22 -j DNAT --to-destination 10.59.0.2
           firewall-cmd --permanent --direct --remove-rule ipv4 nat PREROUTING 0 -i eth0 -p udp -m multiport ! --dports 22,"$port" -j DNAT --to-destination 10.59.0.2
+          firewall-cmd --permanent --direct --remove-rule ipv4 nat PREROUTING 0 -i wg0 -s 10.59.0.0/24 -d $ip -p tcp ! --dport 22 -j DNAT --to-destination 10.59.0.2
+          firewall-cmd --permanent --direct --remove-rule ipv4 nat PREROUTING 0 -i wg0 -s 10.59.0.0/24 -d $ip -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination 10.59.0.2
+          firewall-cmd --permanent --direct --remove-rule ipv4 nat POSTROUTING 0 -o wg0 -s 10.59.0.0/24 -d 10.59.0.2/32 -p tcp ! --dport 22 -j SNAT --to-source 10.59.0.1
+          firewall-cmd --permanent --direct --remove-rule ipv4 nat POSTROUTING 0 -o wg0 -s 10.59.0.0/24 -d 10.59.0.2/32 -p udp -m multiport ! --dports 22,$port -j SNAT --to-source 10.59.0.1
           firewall-cmd --permanent --direct --remove-rule ipv4 filter FORWARD 0 -j ACCEPT
 
           # Remove IPv6 rules if they exist
@@ -563,12 +597,20 @@ else
             firewall-cmd --direct --remove-rule ipv6 nat POSTROUTING 0 -o eth0 -j MASQUERADE
             firewall-cmd --direct --remove-rule ipv6 nat PREROUTING 0 -i eth0 -p tcp ! --dport 22 -j DNAT --to-destination fddd:2c4:2c4:2c4::2
             firewall-cmd --direct --remove-rule ipv6 nat PREROUTING 0 -i eth0 -p udp -m multiport ! --dports 22,"$port" -j DNAT --to-destination fddd:2c4:2c4:2c4::2
+            firewall-cmd --direct --remove-rule ipv6 nat PREROUTING 0 -i wg0 -s fddd:2c4:2c4:2c4::/64 -d $ip6 -p tcp ! --dport 22 -j DNAT --to-destination fddd:2c4:2c4:2c4::2
+            firewall-cmd --direct --remove-rule ipv6 nat PREROUTING 0 -i wg0 -s fddd:2c4:2c4:2c4::/64 -d $ip6 -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination fddd:2c4:2c4:2c4::2
+            firewall-cmd --direct --remove-rule ipv6 nat POSTROUTING 0 -o wg0 -s fddd:2c4:2c4:2c4::/64 -d fddd:2c4:2c4:2c4::/64 -p tcp ! --dport 22 -j SNAT --to-source fddd:2c4:2c4:2c4::1
+            firewall-cmd --direct --remove-rule ipv6 nat POSTROUTING 0 -o wg0 -s fddd:2c4:2c4:2c4::/64 -d fddd:2c4:2c4:2c4::/64 -p udp -m multiport ! --dports 22,$port -j SNAT --to-source fddd:2c4:2c4:2c4::1
             firewall-cmd --direct --remove-rule ipv6 filter FORWARD 0 -j ACCEPT
 
             firewall-cmd --permanent --direct --remove-rule ipv6 filter FORWARD 0 -i wg0 -j ACCEPT
             firewall-cmd --permanent --direct --remove-rule ipv6 nat POSTROUTING 0 -o eth0 -j MASQUERADE
             firewall-cmd --permanent --direct --remove-rule ipv6 nat PREROUTING 0 -i eth0 -p tcp ! --dport 22 -j DNAT --to-destination fddd:2c4:2c4:2c4::2
             firewall-cmd --permanent --direct --remove-rule ipv6 nat PREROUTING 0 -i eth0 -p udp -m multiport ! --dports 22,"$port" -j DNAT --to-destination fddd:2c4:2c4:2c4::2
+            firewall-cmd --permanent --direct --remove-rule ipv6 nat PREROUTING 0 -i wg0 -s fddd:2c4:2c4:2c4::/64 -d $ip6 -p tcp ! --dport 22 -j DNAT --to-destination fddd:2c4:2c4:2c4::2
+            firewall-cmd --permanent --direct --remove-rule ipv6 nat PREROUTING 0 -i wg0 -s fddd:2c4:2c4:2c4::/64 -d $ip6 -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination fddd:2c4:2c4:2c4::2
+            firewall-cmd --permanent --direct --remove-rule ipv6 nat POSTROUTING 0 -o wg0 -s fddd:2c4:2c4:2c4::/64 -d fddd:2c4:2c4:2c4::/64 -p tcp ! --dport 22 -j SNAT --to-source fddd:2c4:2c4:2c4::1
+            firewall-cmd --permanent --direct --remove-rule ipv6 nat POSTROUTING 0 -o wg0 -s fddd:2c4:2c4:2c4::/64 -d fddd:2c4:2c4:2c4::/64 -p udp -m multiport ! --dports 22,$port -j SNAT --to-source fddd:2c4:2c4:2c4::1
             firewall-cmd --permanent --direct --remove-rule ipv6 filter FORWARD 0 -j ACCEPT
           fi
         else
