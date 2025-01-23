@@ -4,28 +4,18 @@
 
 # StartOS WireGuard VPS Setup Tool
 
-Automated WireGuard VPN deployment tool for StartOS that configures a remote VPS server and sets up secure tunneling in under a minute. This project builds upon the excellent [wireguard-install](https://github.com/Nyr/wireguard-install) script.
+This repository contains the VPS configuration script used by the `wg-vps-setup` command in StartOS 3.6+. While the script can be used standalone to manually configure a VPS for StartOS, the recommended method is using the built-in `wg-vps-setup` command on your StartOS system.
 
-## Features
+## For StartOS Users
 
-- One-command VPS configuration and WireGuard installation
-- Automatic SSH key generation and deployment
-- Seamless NetworkManager integration
-- Built-in validation and error handling
-- Clear step-by-step feedback
-- Support for custom SSH keys and ports
-
-## Quick Start
-
-Download and run the script:
+Simply use the built-in command:
 
 ```bash
-curl -OL https://raw.githubusercontent.com/k0gen/wireguard-install/master/wg-vps-setup.sh
-chmod +x wg-vps-setup.sh
-sudo ./wg-vps-setup.sh -i YOUR_VPS_IP
+wg-vps-setup -i YOUR_VPS_IP
 ```
 
-## Usage Options
+### Usage Options
+
 ```bash
 -i    VPS IP address
 -u    SSH username (default: root)
@@ -34,17 +24,20 @@ sudo ./wg-vps-setup.sh -i YOUR_VPS_IP
 -h    Show help message
 ```
 
-## Post-Setup Steps
+## Manual VPS Configuration
 
-The script guides you through essential next steps:
-- ACME certificate management for SSL/TLS
-- Domain configuration for your services
-- Public port binding setup
+If you need to manually configure a VPS for StartOS use:
+
+```bash
+curl -OL https://raw.githubusercontent.com/start9labs/wg-vps-setup/master/wireguard-install.sh
+chmod +x wireguard-install.sh
+./wireguard-install.sh
+```
 
 ## Requirements
 
 - Fresh VPS with root access
-- StartOS on your local machine
+- StartOS 3.6+ for automated setup
 - Basic networking knowledge
 
 ## Contributing

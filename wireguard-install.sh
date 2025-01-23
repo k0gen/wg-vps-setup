@@ -1,10 +1,8 @@
 #!/bin/bash
 #
-# https://github.com/k0gen/wireguard-install
-# Fork of https://github.com/Nyr/wireguard-install
-#
-# Modified for StartOS clearnet functionality
-# Original work Copyright (c) 2020 Nyr. Released under the MIT License.
+# StartOS WireGuard VPS Setup Tool
+# https://github.com/start9labs/wg-vps-setup
+# Derived from github.com/Nyr/wireguard-install (MIT License)
 
 # Detect Debian users running the script with "sh" instead of bash
 if readlink /proc/$/exe | grep -q "dash"; then
