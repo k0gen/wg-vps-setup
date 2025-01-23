@@ -292,7 +292,7 @@ if [ -z "$CUSTOM_SSH_KEY" ]; then
 fi
 
 # Copy SSH public key to the remote server
-if ! ssh-copy-id -i "$SSH_PUBLIC_KEY" -o StrictHostKeyChecking=no -p "$SSH_PORT" "$SSH_USER@$VPS_IP" >/dev/null 2>&1; then
+if ! ssh-copy-id -i "$SSH_PUBLIC_KEY" -o StrictHostKeyChecking=no -p "$SSH_PORT" "$SSH_USER@$VPS_IP"; then
     echo -e "${RED}Failed to copy SSH key to the remote server. Please ensure you have correct credentials.${NC}"
     exit 1
 fi
