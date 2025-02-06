@@ -10,6 +10,13 @@ if readlink /proc/$/exe | grep -q "dash"; then
   exit
 fi
 
+# Function to ensure script runs with root privileges by auto-elevating if needed
+check_root() {
+    if [[ "$EUID" -ne 0 ]]; then
+        exec sudo "$0"
+    fi
+}
+
 # Discard stdin. Needed when running from an one-liner which includes a newline
 read -N 999999 -t 0.001
 
@@ -76,10 +83,8 @@ else
   use_boringtun="1"
 fi
 
-if [[ "$EUID" -ne 0 ]]; then
-  echo "This installer needs to be run with superuser privileges."
-  exit
-fi
+# Check if the script is run as root before anything else
+check_root
 
 if [[ "$use_boringtun" -eq 1 ]]; then
   if [ "$(uname -m)" != "x86_64" ]; then
