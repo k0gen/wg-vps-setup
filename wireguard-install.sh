@@ -10,10 +10,18 @@ if readlink /proc/$/exe | grep -q "dash"; then
   exit
 fi
 
+# Ensure sbin paths are included
+if ! grep -q sbin <<< "$PATH"; then
+    export PATH="$PATH:/usr/local/sbin:/usr/sbin:/sbin"
+fi
+
+# Use absolute paths for critical commands
+SUDO_CMD="/usr/bin/sudo"
+
 # Function to ensure script runs with root privileges by auto-elevating if needed
 check_root() {
     if [[ "$EUID" -ne 0 ]]; then
-        exec sudo "$0"
+        exec $SUDO_CMD "$0"
     fi
 }
 
