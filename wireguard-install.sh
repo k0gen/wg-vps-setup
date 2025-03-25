@@ -10,21 +10,6 @@ if readlink /proc/$/exe | grep -q "dash"; then
   exit
 fi
 
-# Ensure sbin paths are included
-if ! grep -q sbin <<< "$PATH"; then
-    export PATH="$PATH:/usr/local/sbin:/usr/sbin:/sbin"
-fi
-
-# Use absolute paths for critical commands
-SUDO_CMD="/usr/bin/sudo"
-
-# Function to ensure script runs with root privileges by auto-elevating if needed
-check_root() {
-    if [[ "$EUID" -ne 0 ]]; then
-        exec $SUDO_CMD "$0"
-    fi
-}
-
 # Discard stdin. Needed when running from an one-liner which includes a newline
 read -N 999999 -t 0.001
 
@@ -91,8 +76,10 @@ else
   use_boringtun="1"
 fi
 
-# Check if the script is run as root before anything else
-check_root
+if [[ "$EUID" -ne 0 ]]; then
+  echo "This installer needs to be run with superuser privileges."
+  exit
+fi
 
 if [[ "$use_boringtun" -eq 1 ]]; then
   if [ "$(uname -m)" != "x86_64" ]; then
@@ -216,6 +203,35 @@ if [[ ! -e /etc/wireguard/wg0.conf ]]; then
     [[ -z "$ip6_number" ]] && ip6_number="1"
     ip6=$(ip -6 addr | grep 'inet6 [23]' | cut -d '/' -f 1 | grep -oE '([0-9a-fA-F]{0,4}:){1,7}[0-9a-fA-F]{0,4}' | sed -n "$ip6_number"p)
   fi
+
+  # Use default port 51820
+  port="51820"
+
+  # Use STARTOS_HOSTNAME if set, otherwise default to "vps-clearnet"
+  client="${STARTOS_HOSTNAME:-vps-clearnet}"
+  # Sanitize the client name (although it should already be safe if it comes from STARTOS_HOSTNAME)
+  client=$(sed 's/[^0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-]/_/g' <<< "$client" | cut -c-15)
+
+
+
+  # Set up automatic updates for BoringTun if the user is fine with that
+  if [[ "$use_boringtun" -eq 1 ]]; then
+    echo
+    echo "BoringTun will be installed to set up WireGuard in the system."
+    read -p "Should automatic updates be enabled for it? [Y/n]: " boringtun_updates
+    until [[ "$boringtun_updates" =~ ^[yYnN]*$ ]]; do
+      echo "$remove: invalid selection."
+      read -p "Should automatic updates be enabled for it? [Y/n]: " boringtun_updates
+    done
+    [[ -z "$boringtun_updates" ]] && boringtun_updates="y"
+    if [[ "$boringtun_updates" =~ ^[yY]$ ]]; then
+      if [[ "$os" == "centos" || "$os" == "fedora" ]]; then
+        cron="cronie"
+      elif [[ "$os" == "debian" || "$os" == "ubuntu" ]]; then
+        cron="cron"
+      fi
+    fi
+  fi
   echo
   echo "WireGuard installation is ready to begin."
   # Install a firewall if firewalld or iptables are not already available
@@ -256,20 +272,20 @@ if [[ ! -e /etc/wireguard/wg0.conf ]]; then
     if [[ "$os" == "ubuntu" ]]; then
       # Ubuntu
       apt-get update
-      apt-get install -y ca-certificates $firewall
+      apt-get install -y ca-certificates $cron $firewall
       apt-get install -y wireguard-tools --no-install-recommends
     elif [[ "$os" == "debian" ]]; then
       # Debian
       apt-get update
-      apt-get install -y ca-certificates $firewall
+      apt-get install -y ca-certificates $cron $firewall
       apt-get install -y wireguard-tools --no-install-recommends
     elif [[ "$os" == "centos" ]]; then
       # CentOS
       dnf install -y epel-release
-      dnf install -y wireguard-tools ca-certificates tar $firewall
+      dnf install -y wireguard-tools ca-certificates tar $cron $firewall
     elif [[ "$os" == "fedora" ]]; then
       # Fedora
-      dnf install -y wireguard-tools ca-certificates tar $firewall
+      dnf install -y wireguard-tools ca-certificates tar $cron $firewall
       mkdir -p /etc/wireguard/
     fi
     # Grab the BoringTun binary using wget or curl and extract into the right place.
@@ -280,6 +296,9 @@ if [[ ! -e /etc/wireguard/wg0.conf ]]; then
     echo "[Service]
 Environment=WG_QUICK_USERSPACE_IMPLEMENTATION=boringtun
 Environment=WG_SUDO=1" > /etc/systemd/system/wg-quick@wg0.service.d/boringtun.conf
+    if [[ -n "$cron" ]] && [[ "$os" == "centos" || "$os" == "fedora" ]]; then
+      systemctl enable --now crond.service
+    fi
   fi
   # If firewalld was just installed, enable it
   if [[ "$firewall" == "firewalld" ]]; then
@@ -294,7 +313,7 @@ Environment=WG_SUDO=1" > /etc/systemd/system/wg-quick@wg0.service.d/boringtun.co
 [Interface]
 Address = 10.59.0.1/24$([[ -n "$ip6" ]] && echo ", fddd:2c4:2c4:2c4::1/64")
 PrivateKey = $(wg genkey)
-ListenPort = 51820
+ListenPort = $port
 
 EOF
   chmod 600 /etc/wireguard/wg0.conf
@@ -310,9 +329,9 @@ EOF
   fi
   if systemctl is-active --quiet firewalld.service; then
     # Original VPN rules
-    firewall-cmd --add-port="51820"/udp
+    firewall-cmd --add-port="$port"/udp
     firewall-cmd --zone=trusted --add-source=10.59.0.0/24
-    firewall-cmd --permanent --add-port="51820"/udp
+    firewall-cmd --permanent --add-port="$port"/udp
     firewall-cmd --permanent --zone=trusted --add-source=10.59.0.0/24
     firewall-cmd --direct --add-rule ipv4 nat POSTROUTING 0 -s 10.59.0.0/24 ! -d 10.59.0.0/24 -j SNAT --to "$ip"
     firewall-cmd --permanent --direct --add-rule ipv4 nat POSTROUTING 0 -s 10.59.0.0/24 ! -d 10.59.0.0/24 -j SNAT --to "$ip"
@@ -321,22 +340,22 @@ EOF
     firewall-cmd --direct --add-rule ipv4 filter FORWARD 0 -i wg0 -j ACCEPT
     firewall-cmd --direct --add-rule ipv4 nat POSTROUTING 0 -o $PRIMARY_INTERFACE -j MASQUERADE
     firewall-cmd --direct --add-rule ipv4 nat PREROUTING 0 -i $PRIMARY_INTERFACE -p tcp ! --dport 22 -j DNAT --to-destination 10.59.0.2
-    firewall-cmd --direct --add-rule ipv4 nat PREROUTING 0 -i $PRIMARY_INTERFACE -p udp -m multiport ! --dports 22,51820 -j DNAT --to-destination 10.59.0.2
+    firewall-cmd --direct --add-rule ipv4 nat PREROUTING 0 -i $PRIMARY_INTERFACE -p udp -m multiport ! --dports 22,"$port" -j DNAT --to-destination 10.59.0.2
     firewall-cmd --direct --add-rule ipv4 nat PREROUTING 0 -i wg0 -s 10.59.0.0/24 -d $ip -p tcp ! --dport 22 -j DNAT --to-destination 10.59.0.2
-    firewall-cmd --direct --add-rule ipv4 nat PREROUTING 0 -i wg0 -s 10.59.0.0/24 -d $ip -p udp -m multiport ! --dports 22,51820 -j DNAT --to-destination 10.59.0.2
+    firewall-cmd --direct --add-rule ipv4 nat PREROUTING 0 -i wg0 -s 10.59.0.0/24 -d $ip -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination 10.59.0.2
     firewall-cmd --direct --add-rule ipv4 nat POSTROUTING 0 -o wg0 -s 10.59.0.0/24 -d 10.59.0.2/32 -p tcp ! --dport 22 -j SNAT --to-source 10.59.0.1
-    firewall-cmd --direct --add-rule ipv4 nat POSTROUTING 0 -o wg0 -s 10.59.0.0/24 -d 10.59.0.2/32 -p udp -m multiport ! --dports 22,51820 -j SNAT --to-source 10.59.0.1
+    firewall-cmd --direct --add-rule ipv4 nat POSTROUTING 0 -o wg0 -s 10.59.0.0/24 -d 10.59.0.2/32 -p udp -m multiport ! --dports 22,$port -j SNAT --to-source 10.59.0.1
     firewall-cmd --direct --add-rule ipv4 filter FORWARD 0 -j ACCEPT
 
     # Make rules permanent
     firewall-cmd --permanent --direct --add-rule ipv4 filter FORWARD 0 -i wg0 -j ACCEPT
     firewall-cmd --permanent --direct --add-rule ipv4 nat POSTROUTING 0 -o $PRIMARY_INTERFACE -j MASQUERADE
     firewall-cmd --permanent --direct --add-rule ipv4 nat PREROUTING 0 -i $PRIMARY_INTERFACE -p tcp ! --dport 22 -j DNAT --to-destination 10.59.0.2
-    firewall-cmd --permanent --direct --add-rule ipv4 nat PREROUTING 0 -i $PRIMARY_INTERFACE -p udp -m multiport ! --dports 22,51820 -j DNAT --to-destination 10.59.0.2
+    firewall-cmd --permanent --direct --add-rule ipv4 nat PREROUTING 0 -i $PRIMARY_INTERFACE -p udp -m multiport ! --dports 22,"$port" -j DNAT --to-destination 10.59.0.2
     firewall-cmd --permanent --direct --add-rule ipv4 nat PREROUTING 0 -i wg0 -s 10.59.0.0/24 -d $ip -p tcp ! --dport 22 -j DNAT --to-destination 10.59.0.2
-    firewall-cmd --permanent --direct --add-rule ipv4 nat PREROUTING 0 -i wg0 -s 10.59.0.0/24 -d $ip -p udp -m multiport ! --dports 22,51820 -j DNAT --to-destination 10.59.0.2
+    firewall-cmd --permanent --direct --add-rule ipv4 nat PREROUTING 0 -i wg0 -s 10.59.0.0/24 -d $ip -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination 10.59.0.2
     firewall-cmd --permanent --direct --add-rule ipv4 nat POSTROUTING 0 -o wg0 -s 10.59.0.0/24 -d 10.59.0.2/32 -p tcp ! --dport 22 -j SNAT --to-source 10.59.0.1
-    firewall-cmd --permanent --direct --add-rule ipv4 nat POSTROUTING 0 -o wg0 -s 10.59.0.0/24 -d 10.59.0.2/32 -p udp -m multiport ! --dports 22,51820 -j SNAT --to-source 10.59.0.1
+    firewall-cmd --permanent --direct --add-rule ipv4 nat POSTROUTING 0 -o wg0 -s 10.59.0.0/24 -d 10.59.0.2/32 -p udp -m multiport ! --dports 22,$port -j SNAT --to-source 10.59.0.1
     firewall-cmd --permanent --direct --add-rule ipv4 filter FORWARD 0 -j ACCEPT
 
     # IPv6 rules if enabled
@@ -349,21 +368,21 @@ EOF
       firewall-cmd --direct --add-rule ipv6 filter FORWARD 0 -i wg0 -j ACCEPT
       firewall-cmd --direct --add-rule ipv6 nat POSTROUTING 0 -o $PRIMARY_INTERFACE -j MASQUERADE
       firewall-cmd --direct --add-rule ipv6 nat PREROUTING 0 -i $PRIMARY_INTERFACE -p tcp ! --dport 22 -j DNAT --to-destination fddd:2c4:2c4:2c4::2
-      firewall-cmd --direct --add-rule ipv6 nat PREROUTING 0 -i $PRIMARY_INTERFACE -p udp -m multiport ! --dports 22,51820 -j DNAT --to-destination fddd:2c4:2c4:2c4::2
+      firewall-cmd --direct --add-rule ipv6 nat PREROUTING 0 -i $PRIMARY_INTERFACE -p udp -m multiport ! --dports 22,"$port" -j DNAT --to-destination fddd:2c4:2c4:2c4::2
       firewall-cmd --direct --add-rule ipv6 nat PREROUTING 0 -i wg0 -s fddd:2c4:2c4:2c4::/64 -d $ip6 -p tcp ! --dport 22 -j DNAT --to-destination fddd:2c4:2c4:2c4::2
-      firewall-cmd --direct --add-rule ipv6 nat PREROUTING 0 -i wg0 -s fddd:2c4:2c4:2c4::/64 -d $ip6 -p udp -m multiport ! --dports 22,51820 -j DNAT --to-destination fddd:2c4:2c4:2c4::2
+      firewall-cmd --direct --add-rule ipv6 nat PREROUTING 0 -i wg0 -s fddd:2c4:2c4:2c4::/64 -d $ip6 -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination fddd:2c4:2c4:2c4::2
       firewall-cmd --direct --add-rule ipv6 nat POSTROUTING 0 -o wg0 -s fddd:2c4:2c4:2c4::/64 -d fddd:2c4:2c4:2c4::/64 -p tcp ! --dport 22 -j SNAT --to-source fddd:2c4:2c4:2c4::1
-      firewall-cmd --direct --add-rule ipv6 nat POSTROUTING 0 -o wg0 -s fddd:2c4:2c4:2c4::/64 -d fddd:2c4:2c4:2c4::/64 -p udp -m multiport ! --dports 22,51820 -j SNAT --to-source fddd:2c4:2c4:2c4::1
+      firewall-cmd --direct --add-rule ipv6 nat POSTROUTING 0 -o wg0 -s fddd:2c4:2c4:2c4::/64 -d fddd:2c4:2c4:2c4::/64 -p udp -m multiport ! --dports 22,$port -j SNAT --to-source fddd:2c4:2c4:2c4::1
       firewall-cmd --direct --add-rule ipv6 filter FORWARD 0 -j ACCEPT
 
       firewall-cmd --permanent --direct --add-rule ipv6 filter FORWARD 0 -i wg0 -j ACCEPT
       firewall-cmd --permanent --direct --add-rule ipv6 nat POSTROUTING 0 -o $PRIMARY_INTERFACE -j MASQUERADE
       firewall-cmd --permanent --direct --add-rule ipv6 nat PREROUTING 0 -i $PRIMARY_INTERFACE -p tcp ! --dport 22 -j DNAT --to-destination fddd:2c4:2c4:2c4::2
-      firewall-cmd --permanent --direct --add-rule ipv6 nat PREROUTING 0 -i $PRIMARY_INTERFACE -p udp -m multiport ! --dports 22,51820 -j DNAT --to-destination fddd:2c4:2c4:2c4::2
+      firewall-cmd --permanent --direct --add-rule ipv6 nat PREROUTING 0 -i $PRIMARY_INTERFACE -p udp -m multiport ! --dports 22,"$port" -j DNAT --to-destination fddd:2c4:2c4:2c4::2
       firewall-cmd --permanent --direct --add-rule ipv6 nat PREROUTING 0 -i wg0 -s fddd:2c4:2c4:2c4::/64 -d $ip6 -p tcp ! --dport 22 -j DNAT --to-destination fddd:2c4:2c4:2c4::2
-      firewall-cmd --permanent --direct --add-rule ipv6 nat PREROUTING 0 -i wg0 -s fddd:2c4:2c4:2c4::/64 -d $ip6 -p udp -m multiport ! --dports 22,51820 -j DNAT --to-destination fddd:2c4:2c4:2c4::2
+      firewall-cmd --permanent --direct --add-rule ipv6 nat PREROUTING 0 -i wg0 -s fddd:2c4:2c4:2c4::/64 -d $ip6 -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination fddd:2c4:2c4:2c4::2
       firewall-cmd --permanent --direct --add-rule ipv6 nat POSTROUTING 0 -o wg0 -s fddd:2c4:2c4:2c4::/64 -d fddd:2c4:2c4:2c4::/64 -p tcp ! --dport 22 -j SNAT --to-source fddd:2c4:2c4:2c4::1
-      firewall-cmd --permanent --direct --add-rule ipv6 nat POSTROUTING 0 -o wg0 -s fddd:2c4:2c4:2c4::/64 -d fddd:2c4:2c4:2c4::/64 -p udp -m multiport ! --dports 22,51820 -j SNAT --to-source fddd:2c4:2c4:2c4::1
+      firewall-cmd --permanent --direct --add-rule ipv6 nat POSTROUTING 0 -o wg0 -s fddd:2c4:2c4:2c4::/64 -d fddd:2c4:2c4:2c4::/64 -p udp -m multiport ! --dports 22,$port -j SNAT --to-source fddd:2c4:2c4:2c4::1
       firewall-cmd --permanent --direct --add-rule ipv6 filter FORWARD 0 -j ACCEPT
     fi
   else
@@ -376,7 +395,7 @@ EOF
       iptables_path=$(command -v iptables-legacy)
       ip6tables_path=$(command -v ip6tables-legacy)
     fi
-    
+
     if [[ -n "$ip6" ]]; then
       echo "[Unit]
 Before=network.target
@@ -479,11 +498,43 @@ WantedBy=multi-user.target" > /etc/systemd/system/wg-iptables.service
     systemctl enable --now wg-iptables.service
   fi
   # Generates the custom client.conf
-  # Use STARTOS_HOSTNAME if set, otherwise default to "vps-clearnet"
-  client="${STARTOS_HOSTNAME:-vps-clearnet}"
   new_client_setup
   # Enable and start the wg-quick service
   systemctl enable --now wg-quick@wg0.service
+  # Set up automatic updates for BoringTun if the user wanted to
+  if [[ "$boringtun_updates" =~ ^[yY]$ ]]; then
+    # Deploy upgrade script
+    cat << 'EOF' > /usr/local/sbin/boringtun-upgrade
+#!/bin/bash
+latest=$(wget -qO- https://wg.nyr.be/1/latest 2>/dev/null || curl -sL https://wg.nyr.be/1/latest 2>/dev/null)
+# If server did not provide an appropriate response, exit
+if ! head -1 <<< "$latest" | grep -qiE "^boringtun.+[0-9]+\.[0-9]+.*$"; then
+  echo "Update server unavailable"
+  exit
+fi
+current=$(/usr/local/sbin/boringtun -V)
+if [[ "$current" != "$latest" ]]; then
+  download="https://wg.nyr.be/1/latest/download"
+  xdir=$(mktemp -d)
+  # If download and extraction are successful, upgrade the boringtun binary
+  if { wget -qO- "$download" 2>/dev/null || curl -sL "$download" ; } | tar xz -C "$xdir" --wildcards "boringtun-*/boringtun" --strip-components 1; then
+    systemctl stop wg-quick@wg0.service
+    rm -f /usr/local/sbin/boringtun
+    mv "$xdir"/boringtun /usr/local/sbin/boringtun
+    systemctl start wg-quick@wg0.service
+    echo "Succesfully updated to $(/usr/local/sbin/boringtun -V)"
+  else
+    echo "boringtun update failed"
+  fi
+  rm -rf "$xdir"
+else
+  echo "$current is up to date"
+fi
+EOF
+    chmod +x /usr/local/sbin/boringtun-upgrade
+    # Add cron job to run the updater daily at a random time between 3:00 and 5:59
+    { crontab -l 2>/dev/null; echo "$(( $RANDOM % 60 )) $(( $RANDOM % 3 + 3 )) * * * /usr/local/sbin/boringtun-upgrade &>/dev/null" ; } | crontab -
+  fi
   echo
   echo "Finished!"
   echo
