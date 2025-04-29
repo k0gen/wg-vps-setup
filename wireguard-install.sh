@@ -135,6 +135,7 @@ EOF
 [Interface]
 Address = 10.59.0.$octet/24$(grep -q 'fddd:2c4:2c4:2c4::1' /etc/wireguard/wg0.conf && echo ", fddd:2c4:2c4:2c4::$octet/64")
 PrivateKey = $key
+DNS = 8.8.8.8, 8.8.4.4, 1.1.1.1, 1.0.0.1
 
 [Peer]
 PublicKey = $(grep PrivateKey /etc/wireguard/wg0.conf | cut -d " " -f 3 | wg pubkey)
@@ -338,6 +339,7 @@ EOF
 
     # Port forwarding rules
     firewall-cmd --direct --add-rule ipv4 filter FORWARD 0 -i wg0 -j ACCEPT
+    firewall-cmd --direct --add-rule ipv4 filter FORWARD 0 -o wg0 -j ACCEPT
     firewall-cmd --direct --add-rule ipv4 nat POSTROUTING 0 -o $PRIMARY_INTERFACE -j MASQUERADE
     firewall-cmd --direct --add-rule ipv4 nat PREROUTING 0 -i $PRIMARY_INTERFACE -p tcp ! --dport 22 -j DNAT --to-destination 10.59.0.2
     firewall-cmd --direct --add-rule ipv4 nat PREROUTING 0 -i $PRIMARY_INTERFACE -p udp -m multiport ! --dports 22,"$port" -j DNAT --to-destination 10.59.0.2
@@ -349,6 +351,7 @@ EOF
 
     # Make rules permanent
     firewall-cmd --permanent --direct --add-rule ipv4 filter FORWARD 0 -i wg0 -j ACCEPT
+    firewall-cmd --permanent --direct --add-rule ipv4 filter FORWARD 0 -o wg0 -j ACCEPT
     firewall-cmd --permanent --direct --add-rule ipv4 nat POSTROUTING 0 -o $PRIMARY_INTERFACE -j MASQUERADE
     firewall-cmd --permanent --direct --add-rule ipv4 nat PREROUTING 0 -i $PRIMARY_INTERFACE -p tcp ! --dport 22 -j DNAT --to-destination 10.59.0.2
     firewall-cmd --permanent --direct --add-rule ipv4 nat PREROUTING 0 -i $PRIMARY_INTERFACE -p udp -m multiport ! --dports 22,"$port" -j DNAT --to-destination 10.59.0.2
@@ -366,6 +369,7 @@ EOF
       firewall-cmd --permanent --direct --add-rule ipv6 nat POSTROUTING 0 -s fddd:2c4:2c4:2c4::/64 ! -d fddd:2c4:2c4:2c4::/64 -j SNAT --to "$ip6"
 
       firewall-cmd --direct --add-rule ipv6 filter FORWARD 0 -i wg0 -j ACCEPT
+      firewall-cmd --direct --add-rule ipv6 filter FORWARD 0 -o wg0 -j ACCEPT
       firewall-cmd --direct --add-rule ipv6 nat POSTROUTING 0 -o $PRIMARY_INTERFACE -j MASQUERADE
       firewall-cmd --direct --add-rule ipv6 nat PREROUTING 0 -i $PRIMARY_INTERFACE -p tcp ! --dport 22 -j DNAT --to-destination fddd:2c4:2c4:2c4::2
       firewall-cmd --direct --add-rule ipv6 nat PREROUTING 0 -i $PRIMARY_INTERFACE -p udp -m multiport ! --dports 22,"$port" -j DNAT --to-destination fddd:2c4:2c4:2c4::2
@@ -376,6 +380,7 @@ EOF
       firewall-cmd --direct --add-rule ipv6 filter FORWARD 0 -j ACCEPT
 
       firewall-cmd --permanent --direct --add-rule ipv6 filter FORWARD 0 -i wg0 -j ACCEPT
+      firewall-cmd --permanent --direct --add-rule ipv6 filter FORWARD 0 -o wg0 -j ACCEPT
       firewall-cmd --permanent --direct --add-rule ipv6 nat POSTROUTING 0 -o $PRIMARY_INTERFACE -j MASQUERADE
       firewall-cmd --permanent --direct --add-rule ipv6 nat PREROUTING 0 -i $PRIMARY_INTERFACE -p tcp ! --dport 22 -j DNAT --to-destination fddd:2c4:2c4:2c4::2
       firewall-cmd --permanent --direct --add-rule ipv6 nat PREROUTING 0 -i $PRIMARY_INTERFACE -p udp -m multiport ! --dports 22,"$port" -j DNAT --to-destination fddd:2c4:2c4:2c4::2
@@ -408,6 +413,8 @@ ExecStart=$iptables_path -t nat -A POSTROUTING -s 10.59.0.0/24 ! -d 10.59.0.0/24
 ExecStart=$iptables_path -I INPUT -p udp --dport $port -j ACCEPT
 ExecStart=$iptables_path -I FORWARD -s 10.59.0.0/24 -j ACCEPT
 ExecStart=$iptables_path -I FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
+ExecStart=$iptables_path -A FORWARD -i wg0 -j ACCEPT
+ExecStart=$iptables_path -A FORWARD -o wg0 -j ACCEPT
 ExecStart=$iptables_path -t nat -A POSTROUTING -o $PRIMARY_INTERFACE -j MASQUERADE
 ExecStart=$iptables_path -t nat -A PREROUTING -i $PRIMARY_INTERFACE -p tcp ! --dport 22 -j DNAT --to-destination 10.59.0.2
 ExecStart=$iptables_path -t nat -A PREROUTING -i $PRIMARY_INTERFACE -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination 10.59.0.2
@@ -421,6 +428,7 @@ ExecStart=$ip6tables_path -t nat -A POSTROUTING -s fddd:2c4:2c4:2c4::/64 ! -d fd
 ExecStart=$ip6tables_path -I FORWARD -s fddd:2c4:2c4:2c4::/64 -j ACCEPT
 ExecStart=$ip6tables_path -I FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
 ExecStart=$ip6tables_path -A FORWARD -i wg0 -j ACCEPT
+ExecStart=$ip6tables_path -A FORWARD -o wg0 -j ACCEPT
 ExecStart=$ip6tables_path -t nat -A POSTROUTING -o $PRIMARY_INTERFACE -j MASQUERADE
 ExecStart=$ip6tables_path -t nat -A PREROUTING -i $PRIMARY_INTERFACE -p tcp ! --dport 22 -j DNAT --to-destination fddd:2c4:2c4:2c4::2
 ExecStart=$ip6tables_path -t nat -A PREROUTING -i $PRIMARY_INTERFACE -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination fddd:2c4:2c4:2c4::2
@@ -434,6 +442,8 @@ ExecStop=$iptables_path -t nat -D POSTROUTING -s 10.59.0.0/24 ! -d 10.59.0.0/24 
 ExecStop=$iptables_path -D INPUT -p udp --dport $port -j ACCEPT
 ExecStop=$iptables_path -D FORWARD -s 10.59.0.0/24 -j ACCEPT
 ExecStop=$iptables_path -D FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
+ExecStop=$iptables_path -D FORWARD -i wg0 -j ACCEPT
+ExecStop=$iptables_path -D FORWARD -o wg0 -j ACCEPT
 ExecStop=$iptables_path -t nat -D POSTROUTING -o $PRIMARY_INTERFACE -j MASQUERADE
 ExecStop=$iptables_path -t nat -D PREROUTING -i $PRIMARY_INTERFACE -p tcp ! --dport 22 -j DNAT --to-destination 10.59.0.2
 ExecStop=$iptables_path -t nat -D PREROUTING -i $PRIMARY_INTERFACE -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination 10.59.0.2
@@ -447,6 +457,7 @@ ExecStop=$ip6tables_path -t nat -D POSTROUTING -s fddd:2c4:2c4:2c4::/64 ! -d fdd
 ExecStop=$ip6tables_path -D FORWARD -s fddd:2c4:2c4:2c4::/64 -j ACCEPT
 ExecStop=$ip6tables_path -D FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
 ExecStop=$ip6tables_path -D FORWARD -i wg0 -j ACCEPT
+ExecStop=$ip6tables_path -D FORWARD -o wg0 -j ACCEPT
 ExecStop=$ip6tables_path -t nat -D POSTROUTING -o $PRIMARY_INTERFACE -j MASQUERADE
 ExecStop=$ip6tables_path -t nat -D PREROUTING -i $PRIMARY_INTERFACE -p tcp ! --dport 22 -j DNAT --to-destination fddd:2c4:2c4:2c4::2
 ExecStop=$ip6tables_path -t nat -D PREROUTING -i $PRIMARY_INTERFACE -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination fddd:2c4:2c4:2c4::2
@@ -470,6 +481,8 @@ ExecStart=$iptables_path -t nat -A POSTROUTING -s 10.59.0.0/24 ! -d 10.59.0.0/24
 ExecStart=$iptables_path -I INPUT -p udp --dport $port -j ACCEPT
 ExecStart=$iptables_path -I FORWARD -s 10.59.0.0/24 -j ACCEPT
 ExecStart=$iptables_path -I FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
+ExecStart=$iptables_path -A FORWARD -i wg0 -j ACCEPT
+ExecStart=$iptables_path -A FORWARD -o wg0 -j ACCEPT
 ExecStart=$iptables_path -t nat -A POSTROUTING -o $PRIMARY_INTERFACE -j MASQUERADE
 ExecStart=$iptables_path -t nat -A PREROUTING -i $PRIMARY_INTERFACE -p tcp ! --dport 22 -j DNAT --to-destination 10.59.0.2
 ExecStart=$iptables_path -t nat -A PREROUTING -i $PRIMARY_INTERFACE -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination 10.59.0.2
@@ -483,6 +496,8 @@ ExecStop=$iptables_path -t nat -D POSTROUTING -s 10.59.0.0/24 ! -d 10.59.0.0/24 
 ExecStop=$iptables_path -D INPUT -p udp --dport $port -j ACCEPT
 ExecStop=$iptables_path -D FORWARD -s 10.59.0.0/24 -j ACCEPT
 ExecStop=$iptables_path -D FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
+ExecStop=$iptables_path -D FORWARD -i wg0 -j ACCEPT
+ExecStop=$iptables_path -D FORWARD -o wg0 -j ACCEPT
 ExecStop=$iptables_path -t nat -D POSTROUTING -o $PRIMARY_INTERFACE -j MASQUERADE
 ExecStop=$iptables_path -t nat -D PREROUTING -i $PRIMARY_INTERFACE -p tcp ! --dport 22 -j DNAT --to-destination 10.59.0.2
 ExecStop=$iptables_path -t nat -D PREROUTING -i $PRIMARY_INTERFACE -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination 10.59.0.2
@@ -544,15 +559,74 @@ else
   echo "WireGuard is already installed."
   echo
   echo "Select an option:"
-  echo "   1) Remove WireGuard"
-  echo "   2) Connect and exit"
+  echo "   1) Add a new client"
+  echo "   2) Remove an existing client"
+  echo "   3) Remove WireGuard"
+  echo "   4) Exit"
   read -p "Option: " option
-  until [[ "$option" =~ ^[1-2]$ ]]; do
+  until [[ "$option" =~ ^[1-4]$ ]]; do
     echo "$option: invalid selection."
     read -p "Option: " option
   done
   case "$option" in
     1)
+      echo
+      echo "Provide a name for the client:"
+      read -p "Name: " unsanitized_client
+      # Allow a limited length and set of characters to avoid conflicts
+      client=$(sed 's/[^0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-]/_/g' <<< "$unsanitized_client" | cut -c-15)
+      while [[ -z "$client" ]] || grep -q "^# BEGIN_PEER $client$" /etc/wireguard/wg0.conf; do
+        echo "$client: invalid name."
+        read -p "Name: " unsanitized_client
+        client=$(sed 's/[^0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-]/_/g' <<< "$unsanitized_client" | cut -c-15)
+      done
+      echo
+      new_client_setup
+      # Append new client configuration to the WireGuard interface
+      wg addconf wg0 <(sed -n "/^# BEGIN_PEER $client/,/^# END_PEER $client/p" /etc/wireguard/wg0.conf)
+      echo
+      echo "$client added. Configuration available in:" ~/"$client.conf"
+      exit
+      ;;
+    2)
+      # This option could be documented a bit better and maybe even be simplified
+      # ...but what can I say, I want some sleep too
+      number_of_clients=$(grep -c '^# BEGIN_PEER' /etc/wireguard/wg0.conf)
+      if [[ "$number_of_clients" = 0 ]]; then
+        echo
+        echo "There are no existing clients!"
+        exit
+      fi
+      echo
+      echo "Select the client to remove:"
+      grep '^# BEGIN_PEER' /etc/wireguard/wg0.conf | cut -d ' ' -f 3 | nl -s ') '
+      read -p "Client: " client_number
+      until [[ "$client_number" =~ ^[0-9]+$ && "$client_number" -le "$number_of_clients" ]]; do
+        echo "$client_number: invalid selection."
+        read -p "Client: " client_number
+      done
+      client=$(grep '^# BEGIN_PEER' /etc/wireguard/wg0.conf | cut -d ' ' -f 3 | sed -n "$client_number"p)
+      echo
+      read -p "Confirm $client removal? [y/N]: " remove
+      until [[ "$remove" =~ ^[yYnN]*$ ]]; do
+        echo "$remove: invalid selection."
+        read -p "Confirm $client removal? [y/N]: " remove
+      done
+      if [[ "$remove" =~ ^[yY]$ ]]; then
+        # The following is the right way to avoid disrupting other active connections:
+        # Remove from the live interface
+        wg set wg0 peer "$(sed -n "/^# BEGIN_PEER $client$/,\$p" /etc/wireguard/wg0.conf | grep -m 1 PublicKey | cut -d " " -f 3)" remove
+        # Remove from the configuration file
+        sed -i "/^# BEGIN_PEER $client$/,/^# END_PEER $client$/d" /etc/wireguard/wg0.conf
+        echo
+        echo "$client removed!"
+      else
+        echo
+        echo "$client removal aborted!"
+      fi
+      exit
+      ;;
+    3)
       echo
       read -p "Confirm WireGuard removal? [y/N]: " remove
       until [[ "$remove" =~ ^[yYnN]*$ ]]; do
@@ -570,52 +644,12 @@ else
           firewall-cmd --direct --remove-rule ipv4 nat POSTROUTING 0 -s 10.59.0.0/24 ! -d 10.59.0.0/24 -j SNAT --to "$ip"
           firewall-cmd --permanent --direct --remove-rule ipv4 nat POSTROUTING 0 -s 10.59.0.0/24 ! -d 10.59.0.0/24 -j SNAT --to "$ip"
 
-          firewall-cmd --direct --remove-rule ipv4 filter FORWARD 0 -i wg0 -j ACCEPT
-          firewall-cmd --direct --remove-rule ipv4 nat POSTROUTING 0 -o $PRIMARY_INTERFACE -j MASQUERADE
-          firewall-cmd --direct --remove-rule ipv4 nat PREROUTING 0 -i $PRIMARY_INTERFACE -p tcp ! --dport 22 -j DNAT --to-destination 10.59.0.2
-          firewall-cmd --direct --remove-rule ipv4 nat PREROUTING 0 -i $PRIMARY_INTERFACE -p udp -m multiport ! --dports 22,"$port" -j DNAT --to-destination 10.59.0.2
-          firewall-cmd --direct --remove-rule ipv4 nat PREROUTING 0 -i wg0 -s 10.59.0.0/24 -d $ip -p tcp ! --dport 22 -j DNAT --to-destination 10.59.0.2
-          firewall-cmd --direct --remove-rule ipv4 nat PREROUTING 0 -i wg0 -s 10.59.0.0/24 -d $ip -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination 10.59.0.2
-          firewall-cmd --direct --remove-rule ipv4 nat POSTROUTING 0 -o wg0 -s 10.59.0.0/24 -d 10.59.0.2/32 -p tcp ! --dport 22 -j SNAT --to-source 10.59.0.1
-          firewall-cmd --direct --remove-rule ipv4 nat POSTROUTING 0 -o wg0 -s 10.59.0.0/24 -d 10.59.0.2/32 -p udp -m multiport ! --dports 22,$port -j SNAT --to-source 10.59.0.1
-          firewall-cmd --direct --remove-rule ipv4 filter FORWARD 0 -j ACCEPT
-
-          firewall-cmd --permanent --direct --remove-rule ipv4 filter FORWARD 0 -i wg0 -j ACCEPT
-          firewall-cmd --permanent --direct --remove-rule ipv4 nat POSTROUTING 0 -o $PRIMARY_INTERFACE -j MASQUERADE
-          firewall-cmd --permanent --direct --remove-rule ipv4 nat PREROUTING 0 -i $PRIMARY_INTERFACE -p tcp ! --dport 22 -j DNAT --to-destination 10.59.0.2
-          firewall-cmd --permanent --direct --remove-rule ipv4 nat PREROUTING 0 -i $PRIMARY_INTERFACE -p udp -m multiport ! --dports 22,"$port" -j DNAT --to-destination 10.59.0.2
-          firewall-cmd --permanent --direct --remove-rule ipv4 nat PREROUTING 0 -i wg0 -s 10.59.0.0/24 -d $ip -p tcp ! --dport 22 -j DNAT --to-destination 10.59.0.2
-          firewall-cmd --permanent --direct --remove-rule ipv4 nat PREROUTING 0 -i wg0 -s 10.59.0.0/24 -d $ip -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination 10.59.0.2
-          firewall-cmd --permanent --direct --remove-rule ipv4 nat POSTROUTING 0 -o wg0 -s 10.59.0.0/24 -d 10.59.0.2/32 -p tcp ! --dport 22 -j SNAT --to-source 10.59.0.1
-          firewall-cmd --permanent --direct --remove-rule ipv4 nat POSTROUTING 0 -o wg0 -s 10.59.0.0/24 -d 10.59.0.2/32 -p udp -m multiport ! --dports 22,$port -j SNAT --to-source 10.59.0.1
-          firewall-cmd --permanent --direct --remove-rule ipv4 filter FORWARD 0 -j ACCEPT
-
           # Remove IPv6 rules if they exist
           if grep -qs 'fddd:2c4:2c4:2c4::1/64' /etc/wireguard/wg0.conf; then
             firewall-cmd --zone=trusted --remove-source=fddd:2c4:2c4:2c4::/64
             firewall-cmd --permanent --zone=trusted --remove-source=fddd:2c4:2c4:2c4::/64
             firewall-cmd --direct --remove-rule ipv6 nat POSTROUTING 0 -s fddd:2c4:2c4:2c4::/64 ! -d fddd:2c4:2c4:2c4::/64 -j SNAT --to "$ip6"
             firewall-cmd --permanent --direct --remove-rule ipv6 nat POSTROUTING 0 -s fddd:2c4:2c4:2c4::/64 ! -d fddd:2c4:2c4:2c4::/64 -j SNAT --to "$ip6"
-
-            firewall-cmd --direct --remove-rule ipv6 filter FORWARD 0 -i wg0 -j ACCEPT
-            firewall-cmd --direct --remove-rule ipv6 nat POSTROUTING 0 -o $PRIMARY_INTERFACE -j MASQUERADE
-            firewall-cmd --direct --remove-rule ipv6 nat PREROUTING 0 -i $PRIMARY_INTERFACE -p tcp ! --dport 22 -j DNAT --to-destination fddd:2c4:2c4:2c4::2
-            firewall-cmd --direct --remove-rule ipv6 nat PREROUTING 0 -i $PRIMARY_INTERFACE -p udp -m multiport ! --dports 22,"$port" -j DNAT --to-destination fddd:2c4:2c4:2c4::2
-            firewall-cmd --direct --remove-rule ipv6 nat PREROUTING 0 -i wg0 -s fddd:2c4:2c4:2c4::/64 -d $ip6 -p tcp ! --dport 22 -j DNAT --to-destination fddd:2c4:2c4:2c4::2
-            firewall-cmd --direct --remove-rule ipv6 nat PREROUTING 0 -i wg0 -s fddd:2c4:2c4:2c4::/64 -d $ip6 -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination fddd:2c4:2c4:2c4::2
-            firewall-cmd --direct --remove-rule ipv6 nat POSTROUTING 0 -o wg0 -s fddd:2c4:2c4:2c4::/64 -d fddd:2c4:2c4:2c4::/64 -p tcp ! --dport 22 -j SNAT --to-source fddd:2c4:2c4:2c4::1
-            firewall-cmd --direct --remove-rule ipv6 nat POSTROUTING 0 -o wg0 -s fddd:2c4:2c4:2c4::/64 -d fddd:2c4:2c4:2c4::/64 -p udp -m multiport ! --dports 22,$port -j SNAT --to-source fddd:2c4:2c4:2c4::1
-            firewall-cmd --direct --remove-rule ipv6 filter FORWARD 0 -j ACCEPT
-
-            firewall-cmd --permanent --direct --remove-rule ipv6 filter FORWARD 0 -i wg0 -j ACCEPT
-            firewall-cmd --permanent --direct --remove-rule ipv6 nat POSTROUTING 0 -o $PRIMARY_INTERFACE -j MASQUERADE
-            firewall-cmd --permanent --direct --remove-rule ipv6 nat PREROUTING 0 -i $PRIMARY_INTERFACE -p tcp ! --dport 22 -j DNAT --to-destination fddd:2c4:2c4:2c4::2
-            firewall-cmd --permanent --direct --remove-rule ipv6 nat PREROUTING 0 -i $PRIMARY_INTERFACE -p udp -m multiport ! --dports 22,"$port" -j DNAT --to-destination fddd:2c4:2c4:2c4::2
-            firewall-cmd --permanent --direct --remove-rule ipv6 nat PREROUTING 0 -i wg0 -s fddd:2c4:2c4:2c4::/64 -d $ip6 -p tcp ! --dport 22 -j DNAT --to-destination fddd:2c4:2c4:2c4::2
-            firewall-cmd --permanent --direct --remove-rule ipv6 nat PREROUTING 0 -i wg0 -s fddd:2c4:2c4:2c4::/64 -d $ip6 -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination fddd:2c4:2c4:2c4::2
-            firewall-cmd --permanent --direct --remove-rule ipv6 nat POSTROUTING 0 -o wg0 -s fddd:2c4:2c4:2c4::/64 -d fddd:2c4:2c4:2c4::/64 -p tcp ! --dport 22 -j SNAT --to-source fddd:2c4:2c4:2c4::1
-            firewall-cmd --permanent --direct --remove-rule ipv6 nat POSTROUTING 0 -o wg0 -s fddd:2c4:2c4:2c4::/64 -d fddd:2c4:2c4:2c4::/64 -p udp -m multiport ! --dports 22,$port -j SNAT --to-source fddd:2c4:2c4:2c4::1
-            firewall-cmd --permanent --direct --remove-rule ipv6 filter FORWARD 0 -j ACCEPT
           fi
         else
           systemctl disable --now wg-iptables.service
@@ -672,7 +706,7 @@ else
       fi
       exit
       ;;
-    2)
+    4)
       exit
       ;;
   esac
