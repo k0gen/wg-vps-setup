@@ -59,14 +59,14 @@ add_client() {
   fi
 
   # Given a list of the assigned internal IPv4 addresses, obtain the lowest still
-  # available octet. Important to start looking at 2, because 1 is our gateway.
-  octet=2
+  # available octet. Important to start looking at 10, because 1 is our gateway and 2 is StartOS
+  octet=10
   while grep AllowedIPs /etc/wireguard/wg0.conf | cut -d "." -f 4 | cut -d "/" -f 1 | grep -q "^$octet$"; do
     ((octet++))
   done
   # Don't break the WireGuard configuration in case the address space is full
   if [[ "$octet" -eq 255 ]]; then
-    print_error "253 clients are already configured. The WireGuard internal subnet is full!"
+    print_error "245 clients are already configured. The WireGuard internal subnet is full!"
     exit 1
   fi
   key=$(wg genkey)
@@ -577,6 +577,9 @@ Environment=WG_SUDO=1" >/etc/systemd/system/wg-quick@wg0.service.d/boringtun.con
   # If firewalld was just installed, enable it
   if [[ "$firewall" == "firewalld" ]]; then
     systemctl enable --now firewalld.service
+    # First, ensure SSH access is maintained
+    firewall-cmd --add-port=22/tcp
+    firewall-cmd --permanent --add-port=22/tcp
   fi
   # Generate wg0.conf
   cat <<EOF >/etc/wireguard/wg0.conf
@@ -588,6 +591,14 @@ Environment=WG_SUDO=1" >/etc/systemd/system/wg-quick@wg0.service.d/boringtun.con
 Address = 10.59.0.1/24$([[ -n "$ip6" ]] && echo ", fddd:2c4:2c4:2c4::1/64")
 PrivateKey = $(wg genkey)
 ListenPort = $port
+
+# StartOS Configuration
+# BEGIN_PEER startos
+[Peer]
+PublicKey = $(wg pubkey <<<$(wg genkey))
+PresharedKey = $(wg genpsk)
+AllowedIPs = 10.59.0.2/32$(grep -q 'fddd:2c4:2c4:2c4::1' /etc/wireguard/wg0.conf && echo ", fddd:2c4:2c4:2c4::2/128")
+# END_PEER startos
 
 EOF
   chmod 600 /etc/wireguard/wg0.conf
@@ -603,31 +614,37 @@ EOF
   fi
   if systemctl is-active --quiet firewalld.service; then
     # Using both permanent and not permanent rules to avoid a firewalld reload
+    # First, ensure SSH access is maintained
+    firewall-cmd --add-port=22/tcp
+    firewall-cmd --permanent --add-port=22/tcp
+
+    # Then add WireGuard port
     firewall-cmd --add-port="$port"/udp
     firewall-cmd --zone=trusted --add-source=10.59.0.0/24
     firewall-cmd --permanent --add-port="$port"/udp
     firewall-cmd --permanent --zone=trusted --add-source=10.59.0.0/24
-    # Set NAT for the VPN subnet
+
+    # Basic NAT rules
     firewall-cmd --direct --add-rule ipv4 nat POSTROUTING 0 -s 10.59.0.0/24 ! -d 10.59.0.0/24 -j SNAT --to "$ip"
     firewall-cmd --permanent --direct --add-rule ipv4 nat POSTROUTING 0 -s 10.59.0.0/24 ! -d 10.59.0.0/24 -j SNAT --to "$ip"
-    # Add forwarding rules
+
+    # Forwarding rules
     firewall-cmd --direct --add-rule ipv4 filter FORWARD 0 -i wg0 -j ACCEPT
     firewall-cmd --direct --add-rule ipv4 filter FORWARD 0 -o wg0 -j ACCEPT
     firewall-cmd --permanent --direct --add-rule ipv4 filter FORWARD 0 -i wg0 -j ACCEPT
     firewall-cmd --permanent --direct --add-rule ipv4 filter FORWARD 0 -o wg0 -j ACCEPT
-    # Add NAT rules for StartOS access
+
+    # StartOS specific rules
     firewall-cmd --direct --add-rule ipv4 nat PREROUTING 0 -i wg0 -s 10.59.0.0/24 -d $ip -p tcp ! --dport 22 -j DNAT --to-destination 10.59.0.2
     firewall-cmd --direct --add-rule ipv4 nat PREROUTING 0 -i wg0 -s 10.59.0.0/24 -d $ip -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination 10.59.0.2
     firewall-cmd --permanent --direct --add-rule ipv4 nat PREROUTING 0 -i wg0 -s 10.59.0.0/24 -d $ip -p tcp ! --dport 22 -j DNAT --to-destination 10.59.0.2
     firewall-cmd --permanent --direct --add-rule ipv4 nat PREROUTING 0 -i wg0 -s 10.59.0.0/24 -d $ip -p udp -m multiport ! --dports 22,$port -j DNAT --to-destination 10.59.0.2
-    # Add SNAT rules for StartOS access
+
+    # SNAT rules for StartOS
     firewall-cmd --direct --add-rule ipv4 nat POSTROUTING 0 -o wg0 -s 10.59.0.0/24 -d 10.59.0.2/32 -p tcp ! --dport 22 -j SNAT --to-source 10.59.0.1
     firewall-cmd --direct --add-rule ipv4 nat POSTROUTING 0 -o wg0 -s 10.59.0.0/24 -d 10.59.0.2/32 -p udp -m multiport ! --dports 22,$port -j SNAT --to-source 10.59.0.1
     firewall-cmd --permanent --direct --add-rule ipv4 nat POSTROUTING 0 -o wg0 -s 10.59.0.0/24 -d 10.59.0.2/32 -p tcp ! --dport 22 -j SNAT --to-source 10.59.0.1
     firewall-cmd --permanent --direct --add-rule ipv4 nat POSTROUTING 0 -o wg0 -s 10.59.0.0/24 -d 10.59.0.2/32 -p udp -m multiport ! --dports 22,$port -j SNAT --to-source 10.59.0.1
-    # Add general forwarding rule
-    firewall-cmd --direct --add-rule ipv4 filter FORWARD 0 -j ACCEPT
-    firewall-cmd --permanent --direct --add-rule ipv4 filter FORWARD 0 -j ACCEPT
 
     if [[ -n "$ip6" ]]; then
       firewall-cmd --zone=trusted --add-source=fddd:2c4:2c4:2c4::/64
