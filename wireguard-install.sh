@@ -4,6 +4,44 @@
 # https://github.com/start9labs/wg-vps-setup
 # Derived from github.com/Nyr/wireguard-install (MIT License)
 
+# Add command line argument parsing at the start of the script
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --add-client)
+            if [[ -z "$CLIENT_NAME" ]]; then
+                echo "Error: CLIENT_NAME environment variable not set"
+                exit 1
+            fi
+            client="$CLIENT_NAME"
+            new_client_setup
+            exit 0
+            ;;
+        --remove-client)
+            if [[ -z "$CLIENT_NAME" ]]; then
+                echo "Error: CLIENT_NAME environment variable not set"
+                exit 1
+            fi
+            client="$CLIENT_NAME"
+            # Remove from the live interface
+            wg set wg0 peer "$(sed -n "/^# BEGIN_PEER $client$/,\$p" /etc/wireguard/wg0.conf | grep -m 1 PublicKey | cut -d " " -f 3)" remove
+            # Remove from the configuration file
+            sed -i "/^# BEGIN_PEER $client$/,/^# END_PEER $client$/d" /etc/wireguard/wg0.conf
+            echo "Client '$client' removed successfully!"
+            exit 0
+            ;;
+        --list-clients)
+            echo "Existing clients:"
+            grep '^# BEGIN_PEER' /etc/wireguard/wg0.conf | cut -d ' ' -f 3
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            exit 1
+            ;;
+    esac
+    shift
+done
+
 # Detect Debian users running the script with "sh" instead of bash
 if readlink /proc/$/exe | grep -q "dash"; then
   echo 'This installer needs to be run with "bash", not "sh".'
