@@ -182,6 +182,13 @@ AllowedIPs = 0.0.0.0/0, ::/0
 Endpoint = $(grep '^# ENDPOINT' /etc/wireguard/wg0.conf | cut -d " " -f 3):$(grep ListenPort /etc/wireguard/wg0.conf | cut -d " " -f 3)
 PersistentKeepalive = 25
 EOF
+
+  # Display QR code if qrencode is available
+  if command -v qrencode &> /dev/null; then
+    echo
+    qrencode -t ANSI256UTF8 < ~/"$client.conf"
+    echo -e '\xE2\x86\x91 That is a QR code containing your client configuration.'
+  fi
 }
 
 if [[ ! -e /etc/wireguard/wg0.conf ]]; then
@@ -292,18 +299,18 @@ if [[ ! -e /etc/wireguard/wg0.conf ]]; then
     if [[ "$os" == "ubuntu" ]]; then
       # Ubuntu
       apt-get update
-      apt-get install -y wireguard $firewall
+      apt-get install -y wireguard qrencode $firewall
     elif [[ "$os" == "debian" ]]; then
       # Debian
       apt-get update
-      apt-get install -y wireguard $firewall
+      apt-get install -y wireguard qrencode $firewall
     elif [[ "$os" == "centos" ]]; then
       # CentOS
       dnf install -y epel-release
-      dnf install -y wireguard-tools $firewall
+      dnf install -y wireguard-tools qrencode $firewall
     elif [[ "$os" == "fedora" ]]; then
       # Fedora
-      dnf install -y wireguard-tools $firewall
+      dnf install -y wireguard-tools qrencode $firewall
       mkdir -p /etc/wireguard/
     fi
   else
@@ -311,20 +318,20 @@ if [[ ! -e /etc/wireguard/wg0.conf ]]; then
     if [[ "$os" == "ubuntu" ]]; then
       # Ubuntu
       apt-get update
-      apt-get install -y ca-certificates $cron $firewall
+      apt-get install -y qrencode ca-certificates $cron $firewall
       apt-get install -y wireguard-tools --no-install-recommends
     elif [[ "$os" == "debian" ]]; then
       # Debian
       apt-get update
-      apt-get install -y ca-certificates $cron $firewall
+      apt-get install -y qrencode ca-certificates $cron $firewall
       apt-get install -y wireguard-tools --no-install-recommends
     elif [[ "$os" == "centos" ]]; then
       # CentOS
       dnf install -y epel-release
-      dnf install -y wireguard-tools ca-certificates tar $cron $firewall
+      dnf install -y wireguard-tools qrencode ca-certificates tar $cron $firewall
     elif [[ "$os" == "fedora" ]]; then
       # Fedora
-      dnf install -y wireguard-tools ca-certificates tar $cron $firewall
+      dnf install -y wireguard-tools qrencode ca-certificates tar $cron $firewall
       mkdir -p /etc/wireguard/
     fi
     # Grab the BoringTun binary using wget or curl and extract into the right place.
