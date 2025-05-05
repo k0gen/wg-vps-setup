@@ -34,6 +34,75 @@ while [[ $# -gt 0 ]]; do
             grep '^# BEGIN_PEER' /etc/wireguard/wg0.conf | cut -d ' ' -f 3
             exit 0
             ;;
+        --remove)
+            # Get the port from the configuration
+            port=$(grep '^ListenPort' /etc/wireguard/wg0.conf | cut -d " " -f 3)
+            if systemctl is-active --quiet firewalld.service; then
+                # Remove IPv4 rules
+                firewall-cmd --remove-port="$port"/udp
+                firewall-cmd --zone=trusted --remove-source=10.59.0.0/24
+                firewall-cmd --permanent --remove-port="$port"/udp
+                firewall-cmd --permanent --zone=trusted --remove-source=10.59.0.0/24
+                firewall-cmd --direct --remove-rule ipv4 nat POSTROUTING 0 -s 10.59.0.0/24 ! -d 10.59.0.0/24 -j SNAT --to "$ip"
+                firewall-cmd --permanent --direct --remove-rule ipv4 nat POSTROUTING 0 -s 10.59.0.0/24 ! -d 10.59.0.0/24 -j SNAT --to "$ip"
+
+                # Remove IPv6 rules if they exist
+                if grep -qs 'fddd:2c4:2c4:2c4::1/64' /etc/wireguard/wg0.conf; then
+                    firewall-cmd --zone=trusted --remove-source=fddd:2c4:2c4:2c4::/64
+                    firewall-cmd --permanent --zone=trusted --remove-source=fddd:2c4:2c4:2c4::/64
+                    firewall-cmd --direct --remove-rule ipv6 nat POSTROUTING 0 -s fddd:2c4:2c4:2c4::/64 ! -d fddd:2c4:2c4:2c4::/64 -j SNAT --to "$ip6"
+                    firewall-cmd --permanent --direct --remove-rule ipv6 nat POSTROUTING 0 -s fddd:2c4:2c4:2c4::/64 ! -d fddd:2c4:2c4:2c4::/64 -j SNAT --to "$ip6"
+                fi
+            else
+                systemctl disable --now wg-iptables.service
+                rm -f /etc/systemd/system/wg-iptables.service
+            fi
+            systemctl disable --now wg-quick@wg0.service
+            rm -f /etc/systemd/system/wg-quick@wg0.service.d/boringtun.conf
+            rm -f /etc/sysctl.d/99-wireguard-forward.conf
+            # Different stuff was installed depending on whether BoringTun was used or not
+            if [[ "$use_boringtun" -eq 0 ]]; then
+                if [[ "$os" == "ubuntu" ]]; then
+                    # Ubuntu
+                    rm -rf /etc/wireguard/
+                    apt-get remove --purge -y wireguard wireguard-tools
+                elif [[ "$os" == "debian" ]]; then
+                    # Debian
+                    rm -rf /etc/wireguard/
+                    apt-get remove --purge -y wireguard wireguard-tools
+                elif [[ "$os" == "centos" ]]; then
+                    # CentOS
+                    dnf remove -y wireguard-tools
+                    rm -rf /etc/wireguard/
+                elif [[ "$os" == "fedora" ]]; then
+                    # Fedora
+                    dnf remove -y wireguard-tools
+                    rm -rf /etc/wireguard/
+                fi
+            else
+                { crontab -l 2>/dev/null | grep -v '/usr/local/sbin/boringtun-upgrade' ; } | crontab -
+                if [[ "$os" == "ubuntu" ]]; then
+                    # Ubuntu
+                    rm -rf /etc/wireguard/
+                    apt-get remove --purge -y wireguard-tools
+                elif [[ "$os" == "debian" ]]; then
+                    # Debian
+                    rm -rf /etc/wireguard/
+                    apt-get remove --purge -y wireguard-tools
+                elif [[ "$os" == "centos" ]]; then
+                    # CentOS
+                    dnf remove -y wireguard-tools
+                    rm -rf /etc/wireguard/
+                elif [[ "$os" == "fedora" ]]; then
+                    # Fedora
+                    dnf remove -y wireguard-tools
+                    rm -rf /etc/wireguard/
+                fi
+                rm -f /usr/local/sbin/boringtun /usr/local/sbin/boringtun-upgrade
+            fi
+            echo "WireGuard has been completely removed from the system."
+            exit 0
+            ;;
         *)
             echo "Unknown option: $1"
             exit 1
@@ -603,156 +672,7 @@ else
   clear
   echo "WireGuard is already installed."
   echo
-  echo "Select an option:"
-  echo "   1) Add a new client"
-  echo "   2) Remove an existing client"
-  echo "   3) Remove WireGuard"
-  echo "   4) Exit"
-  read -p "Option: " option
-  until [[ "$option" =~ ^[1-4]$ ]]; do
-    echo "$option: invalid selection."
-    read -p "Option: " option
-  done
-  case "$option" in
-    1)
-      echo
-      echo "Provide a name for the client:"
-      read -p "Name: " unsanitized_client
-      # Allow a limited length and set of characters to avoid conflicts
-      client=$(sed 's/[^0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-]/_/g' <<< "$unsanitized_client" | cut -c-15)
-      while [[ -z "$client" ]] || grep -q "^# BEGIN_PEER $client$" /etc/wireguard/wg0.conf; do
-        echo "$client: invalid name."
-        read -p "Name: " unsanitized_client
-        client=$(sed 's/[^0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-]/_/g' <<< "$unsanitized_client" | cut -c-15)
-      done
-      echo
-      new_client_setup
-      # Append new client configuration to the WireGuard interface
-      wg addconf wg0 <(sed -n "/^# BEGIN_PEER $client/,/^# END_PEER $client/p" /etc/wireguard/wg0.conf)
-      echo
-      echo "$client added. Configuration available in:" ~/"$client.conf"
-      exit
-      ;;
-    2)
-      # This option could be documented a bit better and maybe even be simplified
-      # ...but what can I say, I want some sleep too
-      number_of_clients=$(grep -c '^# BEGIN_PEER' /etc/wireguard/wg0.conf)
-      if [[ "$number_of_clients" = 0 ]]; then
-        echo
-        echo "There are no existing clients!"
-        exit
-      fi
-      echo
-      echo "Select the client to remove:"
-      grep '^# BEGIN_PEER' /etc/wireguard/wg0.conf | cut -d ' ' -f 3 | nl -s ') '
-      read -p "Client: " client_number
-      until [[ "$client_number" =~ ^[0-9]+$ && "$client_number" -le "$number_of_clients" ]]; do
-        echo "$client_number: invalid selection."
-        read -p "Client: " client_number
-      done
-      client=$(grep '^# BEGIN_PEER' /etc/wireguard/wg0.conf | cut -d ' ' -f 3 | sed -n "$client_number"p)
-      echo
-      read -p "Confirm $client removal? [y/N]: " remove
-      until [[ "$remove" =~ ^[yYnN]*$ ]]; do
-        echo "$remove: invalid selection."
-        read -p "Confirm $client removal? [y/N]: " remove
-      done
-      if [[ "$remove" =~ ^[yY]$ ]]; then
-        # The following is the right way to avoid disrupting other active connections:
-        # Remove from the live interface
-        wg set wg0 peer "$(sed -n "/^# BEGIN_PEER $client$/,\$p" /etc/wireguard/wg0.conf | grep -m 1 PublicKey | cut -d " " -f 3)" remove
-        # Remove from the configuration file
-        sed -i "/^# BEGIN_PEER $client$/,/^# END_PEER $client$/d" /etc/wireguard/wg0.conf
-        echo
-        echo "$client removed!"
-      else
-        echo
-        echo "$client removal aborted!"
-      fi
-      exit
-      ;;
-    3)
-      echo
-      read -p "Confirm WireGuard removal? [y/N]: " remove
-      until [[ "$remove" =~ ^[yYnN]*$ ]]; do
-        echo "$remove: invalid selection."
-        read -p "Confirm WireGuard removal? [y/N]: " remove
-      done
-      if [[ "$remove" =~ ^[yY]$ ]]; then
-        port=$(grep '^ListenPort' /etc/wireguard/wg0.conf | cut -d " " -f 3)
-        if systemctl is-active --quiet firewalld.service; then
-          # Remove IPv4 rules
-          firewall-cmd --remove-port="$port"/udp
-          firewall-cmd --zone=trusted --remove-source=10.59.0.0/24
-          firewall-cmd --permanent --remove-port="$port"/udp
-          firewall-cmd --permanent --zone=trusted --remove-source=10.59.0.0/24
-          firewall-cmd --direct --remove-rule ipv4 nat POSTROUTING 0 -s 10.59.0.0/24 ! -d 10.59.0.0/24 -j SNAT --to "$ip"
-          firewall-cmd --permanent --direct --remove-rule ipv4 nat POSTROUTING 0 -s 10.59.0.0/24 ! -d 10.59.0.0/24 -j SNAT --to "$ip"
-
-          # Remove IPv6 rules if they exist
-          if grep -qs 'fddd:2c4:2c4:2c4::1/64' /etc/wireguard/wg0.conf; then
-            firewall-cmd --zone=trusted --remove-source=fddd:2c4:2c4:2c4::/64
-            firewall-cmd --permanent --zone=trusted --remove-source=fddd:2c4:2c4:2c4::/64
-            firewall-cmd --direct --remove-rule ipv6 nat POSTROUTING 0 -s fddd:2c4:2c4:2c4::/64 ! -d fddd:2c4:2c4:2c4::/64 -j SNAT --to "$ip6"
-            firewall-cmd --permanent --direct --remove-rule ipv6 nat POSTROUTING 0 -s fddd:2c4:2c4:2c4::/64 ! -d fddd:2c4:2c4:2c4::/64 -j SNAT --to "$ip6"
-          fi
-        else
-          systemctl disable --now wg-iptables.service
-          rm -f /etc/systemd/system/wg-iptables.service
-        fi
-        systemctl disable --now wg-quick@wg0.service
-        rm -f /etc/systemd/system/wg-quick@wg0.service.d/boringtun.conf
-        rm -f /etc/sysctl.d/99-wireguard-forward.conf
-        # Different stuff was installed depending on whether BoringTun was used or not
-        if [[ "$use_boringtun" -eq 0 ]]; then
-          if [[ "$os" == "ubuntu" ]]; then
-            # Ubuntu
-            rm -rf /etc/wireguard/
-            apt-get remove --purge -y wireguard wireguard-tools
-          elif [[ "$os" == "debian" ]]; then
-            # Debian
-            rm -rf /etc/wireguard/
-            apt-get remove --purge -y wireguard wireguard-tools
-          elif [[ "$os" == "centos" ]]; then
-            # CentOS
-            dnf remove -y wireguard-tools
-            rm -rf /etc/wireguard/
-          elif [[ "$os" == "fedora" ]]; then
-            # Fedora
-            dnf remove -y wireguard-tools
-            rm -rf /etc/wireguard/
-          fi
-        else
-          { crontab -l 2>/dev/null | grep -v '/usr/local/sbin/boringtun-upgrade' ; } | crontab -
-          if [[ "$os" == "ubuntu" ]]; then
-            # Ubuntu
-            rm -rf /etc/wireguard/
-            apt-get remove --purge -y wireguard-tools
-          elif [[ "$os" == "debian" ]]; then
-            # Debian
-            rm -rf /etc/wireguard/
-            apt-get remove --purge -y wireguard-tools
-          elif [[ "$os" == "centos" ]]; then
-            # CentOS
-            dnf remove -y wireguard-tools
-            rm -rf /etc/wireguard/
-          elif [[ "$os" == "fedora" ]]; then
-            # Fedora
-            dnf remove -y wireguard-tools
-            rm -rf /etc/wireguard/
-          fi
-          rm -f /usr/local/sbin/boringtun /usr/local/sbin/boringtun-upgrade
-        fi
-        echo
-        echo "WireGuard removed!"
-      else
-        echo
-        echo "WireGuard removal aborted!"
-      fi
-      exit
-      ;;
-    4)
-      exit
-      ;;
-  esac
+  echo "This script is managed by wireguard-vps-proxy-setup."
+  echo "Please use wireguard-vps-proxy-setup to manage clients."
+  exit 0
 fi
