@@ -202,17 +202,23 @@ get_primary_interface() {
 PRIMARY_INTERFACE=$(get_primary_interface)
 
 new_client_setup() {
-  # Given a list of the assigned internal IPv4 addresses, obtain the lowest still
-  # available octet. Important to start looking at 2, because 1 is our gateway.
-  octet=2
-  while grep AllowedIPs /etc/wireguard/wg0.conf | cut -d "." -f 4 | cut -d "/" -f 1 | grep -q "^$octet$"; do
-    ((octet++))
-  done
-  # Don't break the WireGuard configuration in case the address space is full
-  if [[ "$octet" -eq 255 ]]; then
-    print_error "253 clients are already configured. The WireGuard internal subnet is full!"
-    exit 1
+  # Check if this is the initial StartOS setup
+  if [[ -n "$STARTOS_HOSTNAME" && "$client" == "$STARTOS_HOSTNAME" ]]; then
+    # For StartOS, always use 10.59.0.2
+    octet=2
+  else
+    # For other clients, start from 10.59.0.10
+    octet=10
+    while grep AllowedIPs /etc/wireguard/wg0.conf | cut -d "." -f 4 | cut -d "/" -f 1 | grep -q "^$octet$"; do
+      ((octet++))
+    done
+    # Don't break the WireGuard configuration in case the address space is full
+    if [[ "$octet" -eq 255 ]]; then
+      print_error "245 clients are already configured. The WireGuard internal subnet is full!"
+      exit 1
+    fi
   fi
+
   key=$(wg genkey)
   psk=$(wg genpsk)
   # Configure client in the server
